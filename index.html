@@ -349,26 +349,28 @@ function setSyncStatus(state,text){
 }
 
 /* ── APPS SCRIPT API ── */
-// GET — read a tab
+// GET — read a tab (Apps Script redirects GETs, must follow redirect)
 async function shGet(tab){
   const url=`${SCRIPT_URL}?action=read&tab=${encodeURIComponent(tab)}`;
-  const r=await fetch(url);
-  const j=await r.json();
+  const r=await fetch(url,{redirect:'follow'});
+  const text=await r.text();
+  let j;
+  try{j=JSON.parse(text);}catch{throw new Error('Invalid response from sheet');}
   if(!j.ok) throw new Error(j.error||'Read failed');
   return j.values||[];
 }
 
-// POST helper
+// POST helper — Apps Script needs text/plain to avoid CORS preflight
 async function shPost(body){
-  // Apps Script requires no-cors for POST from file:// but works fine from https://
-  // We use a form-encoded trick to handle CORS: send as text via fetch with mode no-cors,
-  // then fall back to reading from cache. For hosted (GitHub Pages) this works fine directly.
   const r=await fetch(SCRIPT_URL,{
     method:'POST',
-    headers:{'Content-Type':'text/plain'}, // avoid preflight
-    body:JSON.stringify(body)
+    headers:{'Content-Type':'text/plain'},
+    body:JSON.stringify(body),
+    redirect:'follow'
   });
-  const j=await r.json();
+  const text=await r.text();
+  let j;
+  try{j=JSON.parse(text);}catch{throw new Error('Invalid response from sheet');}
   if(!j.ok) throw new Error(j.error||'Write failed');
   return j;
 }
@@ -387,42 +389,60 @@ async function shAppendRow(tab,row){
 async function syncFromSheet(showToast=false){
   setSyncStatus('syncing','Syncing…');
   try{
-    // meta
+    // ── meta ──
     const meta=await shGet('meta');
+    let newStores=[],newFields=[];
     meta.forEach(row=>{
-      if(row[0]==='stores')try{stores=JSON.parse(row[1])}catch{}
-      if(row[0]==='fields')try{fields=JSON.parse(row[1])}catch{}
+      if(row[0]==='stores')try{newStores=JSON.parse(row[1])}catch{}
+      if(row[0]==='fields')try{newFields=JSON.parse(row[1])}catch{}
     });
-    if(!stores.length)stores=['Main Store'];
-    if(!fields.length)fields=['Sale','Purchase','Return','Payment','Stock Transfer','JV','Stock Item'];
-    // data
+    // only replace if sheet actually returned values
+    if(newStores.length) stores=newStores;
+    if(newFields.length) fields=newFields;
+    if(!stores.length) stores=ls('sl_stores')||['Main Store'];
+    if(!fields.length) fields=ls('sl_fields')||['Sale','Purchase','Return','Payment','Stock Transfer','JV','Stock Item'];
+
+    // ── data ──
     const rows=await shGet('data');
-    data={};
-    rows.forEach((r,i)=>{
-      if(i===0)return;
-      const[date,store,field,qty,amount,remark,status]=r;
-      if(!date||!store)return;
-      const k=date+'__'+store;
-      if(!data[k])data[k]=[];
-      data[k].push({field:field||'',qty:qty||'',amount:amount||'',remark:remark||'',status:status||'pending'});
-    });
-    // users (admin only)
+    // rows[0] is header — actual data starts at index 1
+    const dataRows=rows.slice(1).filter(r=>r[0]&&r[1]); // must have date + store
+    if(dataRows.length>0){
+      // only replace local data if sheet has real entries
+      const newData={};
+      dataRows.forEach(r=>{
+        const[date,store,field,qty,amount,remark,status]=r;
+        const k=date+'__'+store;
+        if(!newData[k])newData[k]=[];
+        newData[k].push({field:field||'',qty:qty||'',amount:amount||'',remark:remark||'',status:status||'pending'});
+      });
+      data=newData;
+    } else {
+      // sheet has no data rows — keep local cache, don't wipe
+      const cached=ls('sl_data');
+      if(cached&&Object.keys(cached).length>0) data=cached;
+    }
+
+    // ── users (admin only) ──
     if(currentUser?.role==='admin'){
       const ur=await shGet('users');
-      users=[];
-      ur.forEach((r,i)=>{
-        if(i===0||!r[0])return;
-        users.push({username:r[0],password:r[1]||'',role:r[2]||'viewer',stores:r[3]?r[3].split(',').map(s=>s.trim()):['all']});
-      });
-      ls('sl_users',users);
+      const userRows=ur.slice(1).filter(r=>r[0]);
+      if(userRows.length>0){
+        users=userRows.map(r=>({
+          username:r[0],password:r[1]||'',role:r[2]||'viewer',
+          stores:r[3]?r[3].split(',').map(s=>s.trim()):['all']
+        }));
+        ls('sl_users',users);
+      }
     }
+
     ls('sl_data',data);ls('sl_stores',stores);ls('sl_fields',fields);
     setSyncStatus('ok','Synced');
     if(showToast)toast('Synced from Google Sheets');
     renderStores();refreshCurrentView();
   }catch(e){
-    setSyncStatus('err','Offline');
-    if(showToast)toast('Sync failed — using local data',true);
+    setSyncStatus('err','Sync failed');
+    if(showToast)toast('Sync failed: '+e.message,true);
+    // always fall back to cache — never wipe
     loadCache();
   }
 }
@@ -431,16 +451,13 @@ async function syncFromSheet(showToast=false){
 async function pushAllToSheet(){
   setSyncStatus('syncing','Pushing…');
   try{
-    // data tab
     const drows=[['date','store','field','qty','amount','remark','status']];
     Object.entries(data).forEach(([k,entries])=>{
       const[date,store]=k.split('__');
       entries.forEach(r=>drows.push([date,store,r.field||'',r.qty||'',r.amount||'',r.remark||'',r.status||'pending']));
     });
     await shWrite('data',drows);
-    // meta tab
     await shWrite('meta',[['key','value'],['stores',JSON.stringify(stores)],['fields',JSON.stringify(fields)]]);
-    // users tab
     const urows=[['username','password','role','stores'],...users.map(u=>[u.username,u.password,u.role,u.stores.join(',')])];
     await shWrite('users',urows);
     setSyncStatus('ok','Pushed');
@@ -449,9 +466,7 @@ async function pushAllToSheet(){
 }
 
 async function saveMeta(){
-  try{
-    await shWrite('meta',[['key','value'],['stores',JSON.stringify(stores)],['fields',JSON.stringify(fields)]]);
-  }catch{}
+  try{await shWrite('meta',[['key','value'],['stores',JSON.stringify(stores)],['fields',JSON.stringify(fields)]]);}catch{}
 }
 async function saveUsersSheet(){
   try{
