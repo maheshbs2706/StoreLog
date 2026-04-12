@@ -14,6 +14,29 @@
   --pending:#f5a623;--inprogress:#4fa3e0;--completed:#6ed66e;--danger:#e05555;
   --radius:10px;--mono:'DM Mono',monospace;--sans:'Sora',sans-serif;
 }
+html[data-theme="light"]{
+  --bg:#f4f4f0;--surface:#ffffff;--surface2:#f0efe8;
+  --border:#ddddd5;--border2:#c8c8be;
+  --accent:#5a8f00;--accent2:#4a7800;
+  --text:#1a1a18;--text2:#6b6b60;--text3:#a0a095;
+  --pending:#b87000;--inprogress:#1a6fa8;--completed:#2a7a2a;--danger:#c03030;
+}
+/* in light mode, text on accent bg should be white not dark */
+html[data-theme="light"] .login-btn,
+html[data-theme="light"] .btn-accent,
+html[data-theme="light"] .tab.active{color:#fff}
+html[data-theme="light"] .role-admin{background:rgba(90,143,0,.12);color:var(--accent)}
+html[data-theme="light"] .status-pending{background:rgba(184,112,0,.1);color:var(--pending)}
+html[data-theme="light"] .status-inprogress{background:rgba(26,111,168,.1);color:var(--inprogress)}
+html[data-theme="light"] .status-completed{background:rgba(42,122,42,.1);color:var(--completed)}
+html[data-theme="light"] .sf-btn.sf-pending.active{background:rgba(184,112,0,.12);color:var(--pending);border-color:var(--pending)}
+html[data-theme="light"] .sf-btn.sf-inprogress.active{background:rgba(26,111,168,.12);color:var(--inprogress);border-color:var(--inprogress)}
+html[data-theme="light"] .sf-btn.sf-completed.active{background:rgba(42,122,42,.12);color:var(--completed);border-color:var(--completed)}
+html[data-theme="light"] .sf-btn.sf-all.active{background:var(--text);color:var(--bg);border-color:var(--text)}
+html[data-theme="light"] input[type=date]::-webkit-calendar-picker-indicator{filter:none}
+/* theme toggle button */
+.btn-theme{height:28px;width:28px;padding:0;border:1px solid var(--border2);border-radius:var(--radius);background:var(--surface2);color:var(--text2);font-size:14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.btn-theme:hover{color:var(--text);border-color:var(--border2)}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;overscroll-behavior:none}
 
@@ -152,6 +175,15 @@ td select{appearance:none;cursor:pointer;padding-right:20px}
 .user-row .uname{font-family:var(--mono);font-size:13px;color:var(--text);flex:1;min-width:80px}
 .user-row .ustores{font-size:11px;color:var(--text3);flex:2;min-width:100px}
 
+/* store checklist */
+.store-checklist{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:8px;margin-bottom:10px;max-height:180px;overflow-y:auto}
+.store-check-item{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;cursor:pointer;transition:background .1s}
+.store-check-item:hover{background:var(--surface)}
+.store-check-item input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
+.store-check-item label{font-size:13px;color:var(--text);cursor:pointer;flex:1;font-family:var(--sans)}
+.store-check-all{border-bottom:1px solid var(--border);margin-bottom:4px;padding-bottom:4px}
+.store-check-all label{font-weight:500;color:var(--accent);font-family:var(--mono);font-size:12px}
+
 /* TOAST */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--accent);color:#0f0f11;font-family:var(--mono);font-size:12px;font-weight:500;padding:8px 18px;border-radius:20px;opacity:0;transition:all .25s;pointer-events:none;z-index:300;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -168,7 +200,10 @@ td select{appearance:none;cursor:pointer;padding-right:20px}
 <!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
-    <div class="login-logo">Store<span>Log</span></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div class="login-logo">Store<span>Log</span></div>
+      <button class="btn-theme" id="loginThemeBtn" onclick="toggleTheme()" title="Toggle theme">🌙</button>
+    </div>
     <div class="login-sub">Sign in to continue</div>
     <label class="login-label">Username</label>
     <input class="login-input" id="loginUser" type="text" placeholder="username" autocomplete="username">
@@ -189,6 +224,7 @@ td select{appearance:none;cursor:pointer;padding-right:20px}
       <button class="tab" onclick="showView('summary')" id="tab-summary">Summary</button>
       <button class="tab" onclick="showView('admin')" id="tab-admin" style="display:none">Admin</button>
     </div>
+    <button class="btn-theme" id="themeBtn" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
     <button class="btn-logout" onclick="doLogout()">Sign out</button>
   </div>
 
@@ -305,7 +341,7 @@ td select{appearance:none;cursor:pointer;padding-right:20px}
 <div class="modal-overlay" id="userModal">
   <div class="modal">
     <h4 id="umTitle">Add User</h4>
-    <p style="font-size:12px;color:var(--text2);margin-bottom:14px">Fill in the user details. Stores: enter store names separated by commas, or just <b>all</b>.</p>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:14px">Fill in the user details below.</p>
     <label class="modal-label">Username</label>
     <input type="text" id="umUser" placeholder="e.g. ravi">
     <label class="modal-label">Password</label>
@@ -317,7 +353,7 @@ td select{appearance:none;cursor:pointer;padding-right:20px}
       <option value="admin">Admin — full access</option>
     </select>
     <label class="modal-label">Assigned Stores</label>
-    <input type="text" id="umStores" placeholder="all  OR  Main Store, Branch A">
+    <div class="store-checklist" id="storeChecklist"></div>
     <div class="modal-btns">
       <button class="btn" onclick="closeUserModal()">Cancel</button>
       <button class="btn btn-danger" id="umDelBtn" onclick="deleteUser()" style="display:none">Delete</button>
@@ -336,6 +372,22 @@ const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzBmxU5fh9ht6WiCeLWC
 let currentUser=null,stores=[],fields=[],data={},users=[];
 let statusFilter='all',currentView='log',modalType='',editingUser=-1;
 let saveTimer=null;
+
+/* ── THEME ── */
+function applyTheme(theme){
+  document.documentElement.setAttribute('data-theme',theme);
+  const icon=theme==='light'?'☀️':'🌙';
+  ['themeBtn','loginThemeBtn'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.textContent=icon;
+  });
+  localStorage.setItem('sl_theme',theme);
+}
+function toggleTheme(){
+  const current=document.documentElement.getAttribute('data-theme')||'dark';
+  applyTheme(current==='dark'?'light':'dark');
+}
+// apply saved theme immediately
+(function(){applyTheme(localStorage.getItem('sl_theme')||'dark')})();
 
 /* ── UTILS ── */
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
@@ -822,6 +874,45 @@ function renderAdminUsers(){
       <button class="btn" style="height:26px;font-size:11px;padding:0 10px" onclick="openUserModal(${i})">Edit</button>
     </div>`).join('');
 }
+function renderStoreChecklist(selectedStores){
+  // selectedStores: array like ['all'] or ['Main Store','Branch A']
+  const isAll=selectedStores.includes('all');
+  const cl=document.getElementById('storeChecklist');
+  cl.innerHTML=`
+    <div class="store-check-item store-check-all">
+      <input type="checkbox" id="chk-all" ${isAll?'checked':''} onchange="onCheckAll(this)">
+      <label for="chk-all">All Stores</label>
+    </div>
+    ${stores.map((s,i)=>`
+      <div class="store-check-item">
+        <input type="checkbox" id="chk-s-${i}" value="${esc(s)}" ${isAll||selectedStores.includes(s)?'checked':''} ${isAll?'disabled':''} onchange="onCheckStore()">
+        <label for="chk-s-${i}">${esc(s)}</label>
+      </div>`).join('')}`;
+}
+
+function onCheckAll(cb){
+  // when All is toggled, check/uncheck and disable/enable individual stores
+  document.querySelectorAll('#storeChecklist input[id^="chk-s-"]').forEach(el=>{
+    el.checked=cb.checked;
+    el.disabled=cb.checked;
+  });
+}
+
+function onCheckStore(){
+  // if all individual stores are checked, auto-check "All"
+  const storeBoxes=[...document.querySelectorAll('#storeChecklist input[id^="chk-s-"]')];
+  const allChecked=storeBoxes.every(el=>el.checked);
+  const allCb=document.getElementById('chk-all');
+  allCb.checked=allChecked;
+  if(allChecked) storeBoxes.forEach(el=>el.disabled=true);
+}
+
+function getCheckedStores(){
+  if(document.getElementById('chk-all')?.checked) return['all'];
+  return [...document.querySelectorAll('#storeChecklist input[id^="chk-s-"]:checked')]
+    .map(el=>el.value);
+}
+
 function openUserModal(idx){
   editingUser=idx;
   document.getElementById('umTitle').textContent=idx===-1?'Add User':'Edit User';
@@ -830,13 +921,13 @@ function openUserModal(idx){
     document.getElementById('umUser').value='';
     document.getElementById('umPass').value='';
     document.getElementById('umRole').value='editor';
-    document.getElementById('umStores').value='all';
+    renderStoreChecklist(['all']);
   }else{
     const u=users[idx];
     document.getElementById('umUser').value=u.username;
     document.getElementById('umPass').value=u.password;
     document.getElementById('umRole').value=u.role;
-    document.getElementById('umStores').value=u.stores.join(', ');
+    renderStoreChecklist(u.stores||['all']);
   }
   document.getElementById('userModal').classList.add('open');
 }
@@ -845,9 +936,9 @@ async function saveUser(){
   const username=document.getElementById('umUser').value.trim();
   const password=document.getElementById('umPass').value.trim();
   const role=document.getElementById('umRole').value;
-  const stRaw=document.getElementById('umStores').value.trim();
+  const stList=getCheckedStores();
   if(!username||!password){toast('Username and password required',true);return;}
-  const stList=stRaw==='all'?['all']:stRaw.split(',').map(s=>s.trim()).filter(Boolean);
+  if(!stList.length){toast('Select at least one store',true);return;}
   const u={username,password,role,stores:stList};
   if(editingUser===-1){
     if(users.find(x=>x.username===username)){toast('Username already exists',true);return;}
