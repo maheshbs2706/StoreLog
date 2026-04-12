@@ -252,7 +252,7 @@ td.td-remark textarea:focus{outline:none;border-color:var(--accent);background:v
   /* ── STATUS BAR ── */
   .status-bar{
     position:sticky;
-    top:72px;
+    top:76px; /* safe fallback — JS sets exact value after render */
     z-index:40;
     padding:6px 10px;
     gap:5px;
@@ -603,14 +603,23 @@ let saveTimer=null;
 
 /* ── STICKY OFFSET ── */
 function fixStickyOffset(){
-  if(window.innerWidth>600)return;
+  if(window.innerWidth>600) return;
   const h=document.querySelector('.header');
   const sb=document.querySelector('.status-bar');
-  if(h&&sb) sb.style.top=h.offsetHeight+'px';
+  if(!h||!sb) return;
+  const hh=h.getBoundingClientRect().height;
+  if(hh>0) sb.style.top=hh+'px';
 }
 window.addEventListener('resize',fixStickyOffset);
-window.addEventListener('load',fixStickyOffset);
-function fixStickyAfterRender(){setTimeout(fixStickyOffset,150)}
+function fixStickyAfterRender(){
+  // Run at multiple points — appShell goes from display:none so first reads are 0
+  requestAnimationFrame(()=>{
+    fixStickyOffset();
+    setTimeout(fixStickyOffset,50);
+    setTimeout(fixStickyOffset,200);
+    setTimeout(fixStickyOffset,500);
+  });
+}
 
 /* ── THEME ── */
 function applyTheme(theme){
@@ -820,6 +829,7 @@ async function startApp(){
   showView('log');
   fixStickyAfterRender();
   await syncFromSheet();
+  fixStickyAfterRender();
 }
 
 /* ── STORES/FIELDS ── */
