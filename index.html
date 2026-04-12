@@ -338,7 +338,6 @@ let statusFilter='all',currentView='log',modalType='',editingUser=-1;
 let saveTimer=null;
 
 /* ── UTILS ── */
-function ls(k,v){if(v===undefined){try{return JSON.parse(localStorage.getItem(k))}catch{return null}}else localStorage.setItem(k,JSON.stringify(v))}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function toast(msg,err=false){
   const t=document.getElementById('toast');
@@ -387,7 +386,7 @@ async function shAppendRow(tab,row){
   return shPost({action:'append',tab,row});
 }
 
-/* ── SYNC PULL ── */
+/* ── SYNC PULL — always from sheet, no localStorage fallback ── */
 async function syncFromSheet(showToast=false){
   setSyncStatus('syncing','Syncing…');
   try{
@@ -398,56 +397,41 @@ async function syncFromSheet(showToast=false){
       if(row[0]==='stores')try{newStores=JSON.parse(row[1])}catch{}
       if(row[0]==='fields')try{newFields=JSON.parse(row[1])}catch{}
     });
-    // only replace if sheet actually returned values
-    if(newStores.length) stores=newStores;
-    if(newFields.length) fields=newFields;
-    if(!stores.length) stores=ls('sl_stores')||['Main Store'];
-    if(!fields.length) fields=ls('sl_fields')||['Sale','Purchase','Return','Payment','Stock Transfer','JV','Stock Item'];
+    stores=newStores.length?newStores:['Main Store'];
+    fields=newFields.length?newFields:['Sale','Purchase','Return','Payment','Stock Transfer','JV','Stock Item'];
 
     // ── data ──
     const rows=await shGet('data');
-    // rows[0] is header — actual data starts at index 1
-    const dataRows=rows.slice(1).filter(r=>r[0]&&r[1]); // must have date + store
-    if(dataRows.length>0){
-      // only replace local data if sheet has real entries
-      const newData={};
-      dataRows.forEach(r=>{
-        const[rawDate,store,field,qty,amount,remark,status,updatedBy,updatedAt]=r;
-        const date=toDateStr(rawDate);
-        if(!date||!store) return;
-        const k=date+'__'+store;
-        if(!newData[k])newData[k]=[];
-        newData[k].push({field:field||'',qty:qty||'',amount:amount||'',remark:remark||'',status:status||'pending',updatedBy:updatedBy||'',updatedAt:updatedAt||''});
-      });
-      data=newData;
-    } else {
-      // sheet has no data rows — keep local cache, don't wipe
-      const cached=ls('sl_data');
-      if(cached&&Object.keys(cached).length>0) data=cached;
+    const dataRows=rows.slice(1).filter(r=>r[0]&&r[1]);
+    data={};
+    dataRows.forEach(r=>{
+      const[rawDate,store,field,qty,amount,remark,status,updatedBy,updatedAt]=r;
+      const date=toDateStr(rawDate);
+      if(!date||!store)return;
+      const k=date+'__'+store;
+      if(!data[k])data[k]=[];
+      data[k].push({field:field||'',qty:qty||'',amount:amount||'',remark:remark||'',status:status||'pending',updatedBy:updatedBy||'',updatedAt:updatedAt||''});
+    });
+
+    // ── users ──
+    const ur=await shGet('users');
+    const userRows=ur.slice(1).filter(r=>r[0]);
+    if(userRows.length>0){
+      users=userRows.map(r=>({
+        username:r[0],password:r[1]||'',role:r[2]||'viewer',
+        stores:r[3]?r[3].split(',').map(s=>s.trim()):['all']
+      }));
     }
 
-    // ── users (admin only) ──
-    if(currentUser?.role==='admin'){
-      const ur=await shGet('users');
-      const userRows=ur.slice(1).filter(r=>r[0]);
-      if(userRows.length>0){
-        users=userRows.map(r=>({
-          username:r[0],password:r[1]||'',role:r[2]||'viewer',
-          stores:r[3]?r[3].split(',').map(s=>s.trim()):['all']
-        }));
-        ls('sl_users',users);
-      }
-    }
-
-    ls('sl_data',data);ls('sl_stores',stores);ls('sl_fields',fields);
     setSyncStatus('ok','Synced');
     if(showToast)toast('Synced from Google Sheets');
     renderStores();refreshCurrentView();
   }catch(e){
     setSyncStatus('err','Sync failed');
-    if(showToast)toast('Sync failed: '+e.message,true);
-    // always fall back to cache — never wipe
-    loadCache();
+    toast('Could not reach Google Sheets: '+e.message,true);
+    // show empty state — do NOT load stale localStorage data
+    data={};stores=['Main Store'];fields=['Sale','Purchase','Return','Payment','Stock Transfer','JV','Stock Item'];
+    renderStores();refreshCurrentView();
   }
 }
 
@@ -482,29 +466,19 @@ async function cleanAndPush(){
     cleaned[k]=Object.values(seen);
   });
   data=cleaned;
-  ls('sl_data',data);
   renderLog();
   await pushAllToSheet();
   toast('Deduplicated and pushed to sheet');
 }
 
 async function saveMeta(){
-  try{await shWrite('meta',[['key','value'],['stores',JSON.stringify(stores)],['fields',JSON.stringify(fields)]]);}catch{}
+  try{await shWrite('meta',[['key','value'],['stores',JSON.stringify(stores)],['fields',JSON.stringify(fields)]]);}catch(e){toast('Failed to save to sheet',true);}
 }
 async function saveUsersSheet(){
   try{
     const urows=[['username','password','role','stores'],...users.map(u=>[u.username,u.password,u.role,u.stores.join(',')])];
     await shWrite('users',urows);
-  }catch{}
-}
-
-/* ── CACHE ── */
-function loadCache(){
-  data=ls('sl_data')||{};
-  stores=ls('sl_stores')||['Main Store'];
-  fields=ls('sl_fields')||['Sale','Purchase','Return','Payment','Stock Transfer','JV','Stock Item'];
-  users=ls('sl_users')||[];
-  renderStores();refreshCurrentView();
+  }catch(e){toast('Failed to save users to sheet',true);}
 }
 
 /* ── LOGIN / LOGOUT ── */
@@ -513,28 +487,26 @@ async function doLogin(){
   const p=document.getElementById('loginPass').value;
   const err=document.getElementById('loginErr');
   if(!u||!p){err.textContent='Enter username and password';return;}
-  err.textContent='Checking…';
+  err.textContent='Signing in…';
   try{
     const ur=await shGet('users');
-    users=[];
-    ur.forEach((r,i)=>{
-      if(i===0||!r[0])return;
-      users.push({username:r[0],password:r[1]||'',role:r[2]||'viewer',stores:r[3]?r[3].split(',').map(s=>s.trim()):['all']});
-    });
-    ls('sl_users',users);
-  }catch{
-    users=ls('sl_users')||[];
-    if(!users.length)users=[{username:'admin',password:'admin123',role:'admin',stores:['all']}];
+    users=ur.slice(1).filter(r=>r[0]).map(r=>({
+      username:r[0],password:r[1]||'',role:r[2]||'viewer',
+      stores:r[3]?r[3].split(',').map(s=>s.trim()):['all']
+    }));
+  }catch(e){
+    err.textContent='Could not reach server. Check connection.';return;
   }
   const found=users.find(x=>x.username===u&&x.password===p);
   if(!found){err.textContent='Invalid username or password';return;}
-  currentUser=found;ls('sl_currentUser',currentUser);
+  currentUser=found;
   err.textContent='';
   startApp();
 }
 
 function doLogout(){
-  currentUser=null;ls('sl_currentUser',null);
+  currentUser=null;
+  data={};stores=[];fields=[];users=[];
   document.getElementById('appShell').style.display='none';
   document.getElementById('loginScreen').style.display='flex';
   document.getElementById('loginUser').value='';
@@ -603,7 +575,7 @@ function getSummDate(){return document.getElementById('summDateInput').value}
 function getSummStore(){return document.getElementById('summStoreSelect').value}
 function dkey(){return getDate()+'__'+getStore()}
 function getRows(){return data[dkey()]||[]}
-function setRows(rows){data[dkey()]=rows;ls('sl_data',data)}
+function setRows(rows){data[dkey()]=rows}
 
 /* ── STATUS FILTER ── */
 function setStatusFilter(s){
@@ -826,13 +798,13 @@ function openManage(type){
 function closeModal(){document.getElementById('modal').classList.remove('open')}
 function confirmModal(){
   const val=document.getElementById('modalInput').value.trim();if(!val)return;
-  if(modalType==='store'){if(!stores.includes(val)){stores.push(val);ls('sl_stores',stores);renderStores();saveMeta();toast('Store added')}}
-  else{if(!fields.includes(val)){fields.push(val);ls('sl_fields',fields);saveMeta();toast('Field added')}}
+  if(modalType==='store'){if(!stores.includes(val)){stores.push(val);renderStores();saveMeta();toast('Store added')}}
+  else{if(!fields.includes(val)){fields.push(val);saveMeta();toast('Field added')}}
   openManage(modalType);
 }
 function removeItem(i){
-  if(modalType==='store'){if(stores.length<=1){toast('Need at least one store');return}stores.splice(i,1);ls('sl_stores',stores);renderStores();saveMeta();}
-  else{if(fields.length<=1){toast('Need at least one field');return}fields.splice(i,1);ls('sl_fields',fields);saveMeta();}
+  if(modalType==='store'){if(stores.length<=1){toast('Need at least one store');return}stores.splice(i,1);renderStores();saveMeta();}
+  else{if(fields.length<=1){toast('Need at least one field');return}fields.splice(i,1);saveMeta();}
   openManage(modalType);
 }
 document.getElementById('modal').addEventListener('click',e=>{if(e.target===document.getElementById('modal'))closeModal()});
@@ -881,7 +853,6 @@ async function saveUser(){
     if(users.find(x=>x.username===username)){toast('Username already exists',true);return;}
     users.push(u);
   }else{users[editingUser]=u;}
-  ls('sl_users',users);
   await saveUsersSheet();
   closeUserModal();renderAdminUsers();
   toast(editingUser===-1?'User added':'User updated');
@@ -889,7 +860,7 @@ async function saveUser(){
 async function deleteUser(){
   if(editingUser===-1)return;
   if(users[editingUser].username===currentUser.username){toast('Cannot delete yourself',true);return;}
-  users.splice(editingUser,1);ls('sl_users',users);
+  users.splice(editingUser,1);
   await saveUsersSheet();closeUserModal();renderAdminUsers();toast('User deleted');
 }
 document.getElementById('userModal').addEventListener('click',e=>{if(e.target===document.getElementById('userModal'))closeUserModal()});
@@ -920,7 +891,6 @@ async function importJSON(event){
     if(payload.stores)stores=payload.stores;
     if(payload.fields)fields=payload.fields;
     if(payload.data)data={...data,...payload.data};
-    ls('sl_stores',stores);ls('sl_fields',fields);ls('sl_data',data);
     renderStores();refreshCurrentView();
     await pushAllToSheet();
     toast('Import successful — pushed to sheet');
@@ -928,11 +898,6 @@ async function importJSON(event){
   event.target.value='';
 }
 
-/* ── INIT ── */
-(function(){
-  const saved=ls('sl_currentUser');
-  if(saved?.username){currentUser=saved;startApp();}
-})();
 </script>
 </body>
 </html>
