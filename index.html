@@ -190,8 +190,99 @@ td select{appearance:none;cursor:pointer;padding-right:20px}
 .toast.err{background:var(--danger);color:#fff}
 
 @media(max-width:600px){
-  .tabs{width:100%}.tab{flex:1;justify-content:center;font-size:11px}
+  /* header */
+  .header{padding:8px 12px;gap:6px}
+  .logo{font-size:13px}
+  .tabs{width:100%;order:3}
+  .tab{flex:1;justify-content:center;font-size:11px;padding:0 8px;height:28px}
+  .user-badge{font-size:10px}
+  .btn-logout{font-size:10px;padding:0 8px;height:26px}
+  .btn-theme{width:26px;height:26px;font-size:12px}
+
+  /* status bar */
+  .status-bar{padding:6px 10px;gap:5px}
+  .status-bar-label{display:none}
+  .sf-btn{height:24px;padding:0 9px;font-size:10px}
+  .sync-indicator{font-size:10px}
+
+  /* toolbar */
+  .toolbar{padding:8px 10px;gap:6px}
+  .toolbar input[type=date]{height:30px;font-size:12px;min-width:0;flex:1}
+  .store-select-wrap{min-width:0;flex:1;max-width:none}
+  .btn{height:30px;padding:0 10px;font-size:11px}
   .chips{display:none}
+
+  /* table → card layout on mobile */
+  .table-wrap{padding:8px 10px;overflow-x:visible}
+  table{min-width:0;width:100%}
+  thead{display:none}
+  tbody tr{
+    display:block;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    margin-bottom:8px;
+    padding:10px 12px;
+  }
+  tbody tr:last-child{border-bottom:1px solid var(--border)}
+  td{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:4px 0;
+    border:none;
+    font-size:13px;
+  }
+  td::before{
+    content:attr(data-label);
+    font-size:10px;
+    font-family:var(--mono);
+    color:var(--text3);
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    flex-shrink:0;
+    margin-right:10px;
+    min-width:64px;
+  }
+  td.row-num{display:none}
+  td input,td select{text-align:right;font-size:12px}
+  td input[type=number]{max-width:90px}
+  td input[type=text]{max-width:140px}
+
+  /* summary cards */
+  .summary-grid{padding:8px 10px}
+  .store-card-header{flex-direction:column;align-items:flex-start;gap:2px;padding:8px 12px}
+  .mini-table{min-width:0}
+  .mini-table colgroup{display:none}
+  .mini-table thead{display:none}
+  .mini-table tbody tr{
+    display:block;
+    background:var(--surface);
+    border:none;
+    border-bottom:1px solid var(--border);
+    padding:8px 12px;
+  }
+  .mini-table td{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:2px 0;border:none;font-size:12px;
+    white-space:normal;
+  }
+  .mini-table td::before{
+    content:attr(data-label);
+    font-size:10px;font-family:var(--mono);color:var(--text3);
+    text-transform:uppercase;letter-spacing:.04em;flex-shrink:0;margin-right:8px;min-width:56px;
+  }
+  .mini-table td:first-child{font-size:13px;font-weight:500}
+  .mini-table td.num{text-align:right}
+
+  /* overall card */
+  .overall-card{gap:12px;padding:10px 12px}
+  .overall-stat .os-val{font-size:16px}
+
+  /* admin */
+  .admin-section{padding:12px 14px}
+  .user-row{flex-wrap:wrap;gap:6px}
+  .user-row .ustores{display:none}
 }
 </style>
 </head>
@@ -679,27 +770,27 @@ function renderLog(){
     if(!isEdit){
       return`<tr>
         <td class="row-num">${ri+1}</td>
-        <td style="padding:5px 10px;font-size:13px">${esc(r.field)}</td>
-        <td style="font-family:var(--mono);text-align:right;padding:5px 10px">${r.qty||'—'}</td>
-        <td style="font-family:var(--mono);text-align:right;padding:5px 10px">&#8377;${Number(r.amount||0).toLocaleString('en-IN',{maximumFractionDigits:2})}</td>
-        <td style="color:var(--text2);font-size:12px;padding:5px 10px">${esc(r.remark||'—')}</td>
-        <td style="padding:5px 10px"><span class="status-pill status-${r.status||'pending'}">${r.status||'pending'}</span></td>
-        <td style="padding:5px 10px">${updInfo}</td>
+        <td data-label="Field" style="padding:5px 10px;font-size:13px">${esc(r.field)}</td>
+        <td data-label="Qty" style="font-family:var(--mono);text-align:right;padding:5px 10px">${r.qty||'—'}</td>
+        <td data-label="Amount" style="font-family:var(--mono);text-align:right;padding:5px 10px">&#8377;${Number(r.amount||0).toLocaleString('en-IN',{maximumFractionDigits:2})}</td>
+        <td data-label="Remark" style="color:var(--text2);font-size:12px;padding:5px 10px">${esc(r.remark||'—')}</td>
+        <td data-label="Status" style="padding:5px 10px"><span class="status-pill status-${r.status||'pending'}">${r.status||'pending'}</span></td>
+        <td data-label="Updated" style="padding:5px 10px">${updInfo}</td>
         <td></td></tr>`;
     }
     const avail=availableFields(allRows,ri);
     return`<tr>
       <td class="row-num">${ri+1}</td>
-      <td><select class="field-sel" onchange="upd(${ri},'field',this.value)">${avail.map(f=>`<option${f===r.field?' selected':''}>${f}</option>`).join('')}</select></td>
-      <td><input type="number" min="0" value="${r.qty||''}" placeholder="0" oninput="upd(${ri},'qty',this.value)"></td>
-      <td><input type="number" min="0" step="0.01" value="${r.amount||''}" placeholder="0.00" oninput="upd(${ri},'amount',this.value)"></td>
-      <td><input type="text" value="${esc(r.remark||'')}" placeholder="Add remark…" oninput="upd(${ri},'remark',this.value)"></td>
-      <td><select onchange="upd(${ri},'status',this.value);this.className='status-pill status-'+this.value" class="status-pill status-${r.status||'pending'}">
+      <td data-label="Field"><select class="field-sel" onchange="upd(${ri},'field',this.value)">${avail.map(f=>`<option${f===r.field?' selected':''}>${f}</option>`).join('')}</select></td>
+      <td data-label="Qty"><input type="number" min="0" value="${r.qty||''}" placeholder="0" oninput="upd(${ri},'qty',this.value)"></td>
+      <td data-label="Amount"><input type="number" min="0" step="0.01" value="${r.amount||''}" placeholder="0.00" oninput="upd(${ri},'amount',this.value)"></td>
+      <td data-label="Remark"><input type="text" value="${esc(r.remark||'')}" placeholder="Add remark…" oninput="upd(${ri},'remark',this.value)"></td>
+      <td data-label="Status"><select onchange="upd(${ri},'status',this.value);this.className='status-pill status-'+this.value" class="status-pill status-${r.status||'pending'}">
         <option${r.status==='pending'?' selected':''} value="pending">Pending</option>
         <option${r.status==='inprogress'?' selected':''} value="inprogress">In Progress</option>
         <option${r.status==='completed'?' selected':''} value="completed">Completed</option>
       </select></td>
-      <td style="padding:5px 10px">${updInfo}</td>
+      <td data-label="Updated" style="padding:5px 10px">${updInfo}</td>
       <td><button class="del-btn" onclick="delRow(${ri})">✕</button></td>
     </tr>`;
   }).join('');
@@ -777,12 +868,12 @@ function renderSummary(){
         <colgroup><col class="col-field"><col class="col-qty"><col class="col-amt"><col class="col-status"><col class="col-remark"><col style="width:14%"></colgroup>
         <thead><tr><th>Field</th><th class="num">Qty</th><th class="num">Amount</th><th>Status</th><th>Remark</th><th>Updated By</th></tr></thead>
         <tbody>${rows.map(r=>`<tr>
-          <td>${esc(r.field)}</td>
-          <td class="num">${r.qty||'—'}</td>
-          <td class="num">&#8377;${Number(r.amount||0).toLocaleString('en-IN',{maximumFractionDigits:2})}</td>
-          <td><span class="status-pill status-${r.status||'pending'}">${r.status||'pending'}</span></td>
-          <td class="remark-cell">${esc(r.remark||'—')}</td>
-          <td style="font-size:11px;font-family:var(--mono);color:var(--accent)">${esc(r.updatedBy||'—')}<br><span style="color:var(--text3);font-size:10px">${esc(r.updatedAt||'')}</span></td>
+          <td data-label="Field">${esc(r.field)}</td>
+          <td data-label="Qty" class="num">${r.qty||'—'}</td>
+          <td data-label="Amount" class="num">&#8377;${Number(r.amount||0).toLocaleString('en-IN',{maximumFractionDigits:2})}</td>
+          <td data-label="Status"><span class="status-pill status-${r.status||'pending'}">${r.status||'pending'}</span></td>
+          <td data-label="Remark" class="remark-cell">${esc(r.remark||'—')}</td>
+          <td data-label="By" style="font-size:11px;font-family:var(--mono);color:var(--accent)">${esc(r.updatedBy||'—')}<br><span style="color:var(--text3);font-size:10px">${esc(r.updatedAt||'')}</span></td>
         </tr>`).join('')}</tbody>
       </table>
     </div>`;
@@ -813,9 +904,10 @@ function renderOverall(d,grid,allowed){
       <colgroup><col style="width:35%"><col style="width:20%"><col style="width:25%"><col style="width:20%"></colgroup>
       <thead><tr><th>Field Type</th><th class="num">Total Qty</th><th class="num">Total Amount</th><th class="num">Entries</th></tr></thead>
       <tbody>${Object.entries(fm).map(([f,v])=>`<tr>
-        <td>${esc(f)}</td><td class="num">${v.qty||'—'}</td>
-        <td class="num">&#8377;${v.amount.toLocaleString('en-IN',{maximumFractionDigits:2})}</td>
-        <td class="num" style="color:var(--text2)">${v.count}</td>
+        <td data-label="Field">${esc(f)}</td>
+        <td data-label="Qty" class="num">${v.qty||'—'}</td>
+        <td data-label="Amount" class="num">&#8377;${v.amount.toLocaleString('en-IN',{maximumFractionDigits:2})}</td>
+        <td data-label="Entries" class="num" style="color:var(--text2)">${v.count}</td>
       </tr>`).join('')}</tbody>
     </table>
   </div>`;

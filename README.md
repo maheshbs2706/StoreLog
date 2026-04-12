@@ -159,9 +159,17 @@ Switch to the **Summary** tab to view data for any date:
 
 Use the status filter bar (All / Pending / In Progress / Completed) to filter across both views.
 
+### Theme Toggle
+
+Click the 🌙 / ☀️ button in the top-right corner (visible on both the login screen and inside the app) to switch between dark and light mode. The preference is saved in the browser and applied automatically on the next visit.
+
+### Mobile Layout
+
+On phones and small screens the app adapts automatically — the header and filter bar shrink to fit, and the data table switches from a wide horizontal layout to a **card-per-row** layout, showing each field as a labelled row within a card. This works in both the Daily Log and Summary views without any horizontal scrolling.
+
 ### Admin Panel (Admin role only)
 
-- **User Management** — add, edit, delete users; assign roles and stores
+- **User Management** — add, edit, delete users; assign roles and stores via a checkbox list (defaults to All Stores)
 - **Manage Stores** — add or remove store names
 - **Manage Fields** — add or remove transaction field types
 - **Export JSON** — download all data as a JSON backup file
@@ -228,3 +236,5 @@ Failing to create a new version means the old cached code keeps running.
 | Sync dot stays red | Network or CORS issue | Check browser console; try redeploying Apps Script |
 | Duplicate entries in sheet | Old entries from before dedup fix | Use Admin → Deduplicate & Push |
 | Changes not saving | Apps Script not redeployed after update | Always deploy as New version after code changes |
+| Table overflows on mobile | Old cached version of the file | Hard refresh the page (Ctrl+Shift+R) or clear browser cache |
+| Theme resets on reload | localStorage cleared by browser | Re-toggle the theme; preference saves back automatically |
