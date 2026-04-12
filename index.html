@@ -222,11 +222,12 @@ td select{appearance:none;cursor:pointer;padding-right:20px}
       <table>
         <thead><tr>
           <th style="width:28px">#</th>
-          <th style="width:140px">Field Type</th>
-          <th style="width:80px">Qty</th>
-          <th style="width:120px">Amount (&#8377;)</th>
+          <th style="width:130px">Field Type</th>
+          <th style="width:70px">Qty</th>
+          <th style="width:110px">Amount (&#8377;)</th>
           <th>Remark</th>
-          <th style="width:120px">Status</th>
+          <th style="width:110px">Status</th>
+          <th style="width:110px">Updated By</th>
           <th style="width:36px"></th>
         </tr></thead>
         <tbody id="logBody"></tbody>
@@ -411,12 +412,12 @@ async function syncFromSheet(showToast=false){
       // only replace local data if sheet has real entries
       const newData={};
       dataRows.forEach(r=>{
-        const[rawDate,store,field,qty,amount,remark,status]=r;
-        const date=toDateStr(rawDate); // normalize ISO datetime → YYYY-MM-DD
+        const[rawDate,store,field,qty,amount,remark,status,updatedBy,updatedAt]=r;
+        const date=toDateStr(rawDate);
         if(!date||!store) return;
         const k=date+'__'+store;
         if(!newData[k])newData[k]=[];
-        newData[k].push({field:field||'',qty:qty||'',amount:amount||'',remark:remark||'',status:status||'pending'});
+        newData[k].push({field:field||'',qty:qty||'',amount:amount||'',remark:remark||'',status:status||'pending',updatedBy:updatedBy||'',updatedAt:updatedAt||''});
       });
       data=newData;
     } else {
@@ -454,12 +455,12 @@ async function syncFromSheet(showToast=false){
 async function pushAllToSheet(){
   setSyncStatus('syncing','Pushing…');
   try{
-    const drows=[['date','store','field','qty','amount','remark','status']];
+    const drows=[['date','store','field','qty','amount','remark','status','updatedBy','updatedAt']];
     Object.entries(data).forEach(([k,entries])=>{
       const idx=k.indexOf('__');
       const date=k.substring(0,idx);
       const store=k.substring(idx+2);
-      entries.forEach(r=>drows.push([date,store,r.field||'',r.qty||'',r.amount||'',r.remark||'',r.status||'pending']));
+      entries.forEach(r=>drows.push([date,store,r.field||'',r.qty||'',r.amount||'',r.remark||'',r.status||'pending',r.updatedBy||'',r.updatedAt||'']));
     });
     await shWrite('data',drows);
     await shWrite('meta',[['key','value'],['stores',JSON.stringify(stores)],['fields',JSON.stringify(fields)]]);
@@ -639,15 +640,18 @@ function renderLog(){
   updateStatusCounts(allRows);
   const body=document.getElementById('logBody');
   if(!allRows.length){
-    body.innerHTML=`<tr><td colspan="7"><div class="empty-state"><div class="big">📋</div><p>${isEdit?'No entries yet. Click <b>+ Add Entry</b> to begin.':'No entries for this store & date.'}</p></div></td></tr>`;
+    body.innerHTML=`<tr><td colspan="8"><div class="empty-state"><div class="big">📋</div><p>${isEdit?'No entries yet. Click <b>+ Add Entry</b> to begin.':'No entries for this store & date.'}</p></div></td></tr>`;
     renderChips([]);return;
   }
   if(!rows.length){
-    body.innerHTML=`<tr><td colspan="7"><div class="empty-state"><p>No <b>${statusFilter}</b> entries.</p></div></td></tr>`;
+    body.innerHTML=`<tr><td colspan="8"><div class="empty-state"><p>No <b>${statusFilter}</b> entries.</p></div></td></tr>`;
     renderChips(allRows);return;
   }
   body.innerHTML=rows.map(r=>{
     const ri=allRows.indexOf(r);
+    const updInfo=r.updatedBy
+      ?`<div style="font-size:11px;font-family:var(--mono);color:var(--accent)">${esc(r.updatedBy)}</div><div style="font-size:10px;color:var(--text3)">${esc(r.updatedAt||'')}</div>`
+      :`<span style="color:var(--text3);font-size:11px">—</span>`;
     if(!isEdit){
       return`<tr>
         <td class="row-num">${ri+1}</td>
@@ -656,6 +660,7 @@ function renderLog(){
         <td style="font-family:var(--mono);text-align:right;padding:5px 10px">&#8377;${Number(r.amount||0).toLocaleString('en-IN',{maximumFractionDigits:2})}</td>
         <td style="color:var(--text2);font-size:12px;padding:5px 10px">${esc(r.remark||'—')}</td>
         <td style="padding:5px 10px"><span class="status-pill status-${r.status||'pending'}">${r.status||'pending'}</span></td>
+        <td style="padding:5px 10px">${updInfo}</td>
         <td></td></tr>`;
     }
     const avail=availableFields(allRows,ri);
@@ -670,6 +675,7 @@ function renderLog(){
         <option${r.status==='inprogress'?' selected':''} value="inprogress">In Progress</option>
         <option${r.status==='completed'?' selected':''} value="completed">Completed</option>
       </select></td>
+      <td style="padding:5px 10px">${updInfo}</td>
       <td><button class="del-btn" onclick="delRow(${ri})">✕</button></td>
     </tr>`;
   }).join('');
@@ -686,22 +692,31 @@ function renderChips(rows){
 }
 function chip(l,v){return`<div class="chip"><span class="chip-label">${l}</span><span class="chip-val">${v}</span></div>`}
 
+function nowStr(){
+  const d=new Date();
+  return d.toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:true});
+}
+
 async function addRow(){
   const rows=getRows();
   const used=new Set(rows.map(r=>r.field));
   const next=fields.find(f=>!used.has(f));
   if(!next){toast('All field types already added');return;}
-  const nr={field:next,qty:'',amount:'',remark:'',status:'pending'};
+  const nr={field:next,qty:'',amount:'',remark:'',status:'pending',updatedBy:currentUser.username,updatedAt:nowStr()};
   rows.push(nr);setRows(rows);renderLog();
   setSyncStatus('syncing','Saving…');
   try{
-    await shAppendRow('data',[getDate(),getStore(),nr.field,nr.qty||'',nr.amount||'',nr.remark||'',nr.status]);
+    await shAppendRow('data',[getDate(),getStore(),nr.field,nr.qty||'',nr.amount||'',nr.remark||'',nr.status,nr.updatedBy,nr.updatedAt]);
     setSyncStatus('ok','Saved');
   }catch{setSyncStatus('err','Save failed')}
   setTimeout(()=>{const trs=document.querySelectorAll('#logBody tr');if(trs.length)trs[trs.length-1].scrollIntoView({block:'nearest'})},50);
 }
 function upd(i,k,v){
-  const rows=getRows();rows[i][k]=v;setRows(rows);
+  const rows=getRows();
+  rows[i][k]=v;
+  rows[i].updatedBy=currentUser.username;
+  rows[i].updatedAt=nowStr();
+  setRows(rows);
   if(k==='field')renderLog();else renderChips(rows);
   clearTimeout(saveTimer);
   saveTimer=setTimeout(()=>pushAllToSheet(),1500);
@@ -735,14 +750,15 @@ function renderSummary(){
         <span class="stotals">${rows.length} entries &middot; &#8377;${tAmt.toLocaleString('en-IN',{maximumFractionDigits:2})}</span>
       </div>
       <table class="mini-table">
-        <colgroup><col class="col-field"><col class="col-qty"><col class="col-amt"><col class="col-status"><col class="col-remark"></colgroup>
-        <thead><tr><th>Field</th><th class="num">Qty</th><th class="num">Amount</th><th>Status</th><th>Remark</th></tr></thead>
+        <colgroup><col class="col-field"><col class="col-qty"><col class="col-amt"><col class="col-status"><col class="col-remark"><col style="width:14%"></colgroup>
+        <thead><tr><th>Field</th><th class="num">Qty</th><th class="num">Amount</th><th>Status</th><th>Remark</th><th>Updated By</th></tr></thead>
         <tbody>${rows.map(r=>`<tr>
           <td>${esc(r.field)}</td>
           <td class="num">${r.qty||'—'}</td>
           <td class="num">&#8377;${Number(r.amount||0).toLocaleString('en-IN',{maximumFractionDigits:2})}</td>
           <td><span class="status-pill status-${r.status||'pending'}">${r.status||'pending'}</span></td>
           <td class="remark-cell">${esc(r.remark||'—')}</td>
+          <td style="font-size:11px;font-family:var(--mono);color:var(--accent)">${esc(r.updatedBy||'—')}<br><span style="color:var(--text3);font-size:10px">${esc(r.updatedAt||'')}</span></td>
         </tr>`).join('')}</tbody>
       </table>
     </div>`;

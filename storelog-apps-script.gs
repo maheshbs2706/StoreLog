@@ -1,12 +1,13 @@
 // ============================================================
-//  StoreLog — Google Apps Script Backend  (v2)
+//  StoreLog — Google Apps Script Backend  (v3)
 //  IMPORTANT: After pasting, redeploy as a NEW version:
 //  Deploy → Manage deployments → Edit (pencil) → Version: New version → Deploy
 // ============================================================
 
 const SHEET_ID = '1tobXlF3kBIZcuUzIK4W9BrRuoe0m7Yu42rWaFj4bBd8';
 
-// ── Response helper with CORS headers ───────────────────────
+// Sheet columns for 'data' tab:
+// date | store | field | qty | amount | remark | status | updatedBy | updatedAt
 function makeResponse(data) {
   const output = ContentService
     .createTextOutput(JSON.stringify(data))
