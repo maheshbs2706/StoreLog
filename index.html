@@ -55,7 +55,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 
 /* APP SHELL */
 #appShell{display:none;flex-direction:column;min-height:100vh}
-.header{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:50;flex-wrap:wrap}
+.header{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:50}
+.header-top{display:contents}
+.header-right{display:flex;align-items:center;gap:6px}
 .logo{font-family:var(--mono);font-size:15px;font-weight:500;color:var(--accent);letter-spacing:-0.5px;white-space:nowrap}
 .logo span{color:var(--text2);font-weight:400}
 .user-badge{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:20px;background:var(--surface2);border:1px solid var(--border2);font-size:11px;font-family:var(--mono);color:var(--text2)}
@@ -64,6 +66,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .role-editor{background:rgba(79,163,224,.15);color:var(--inprogress)}
 .role-viewer{background:rgba(136,136,160,.15);color:var(--text2)}
 .tabs{display:flex;gap:4px;margin-left:auto}
+.header-right{display:flex;align-items:center;gap:6px}
 .tab{height:30px;padding:0 14px;border:1px solid var(--border2);border-radius:var(--radius);background:transparent;color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer;transition:all .15s}
 .tab.active{background:var(--accent);color:#0f0f11;border-color:var(--accent);font-weight:600}
 .tab:not(.active):hover{color:var(--text)}
@@ -117,10 +120,43 @@ tbody tr{border-bottom:1px solid var(--border)}
 tbody tr:hover{background:var(--surface2)}
 tbody tr:last-child{border-bottom:none}
 td{padding:5px 8px;vertical-align:middle}
-td input,td select,td textarea{width:100%;background:transparent;border:1px solid transparent;border-radius:6px;padding:4px 7px;font-family:var(--sans);font-size:13px;color:var(--text);transition:border .1s}
+td input,td select{width:100%;background:transparent;border:1px solid transparent;border-radius:6px;padding:4px 7px;font-family:var(--sans);font-size:13px;color:var(--text);transition:border .1s}
 td input:hover,td select:hover{border-color:var(--border2)}
 td input:focus,td select:focus{outline:none;border-color:var(--accent);background:var(--surface)}
 td select{appearance:none;cursor:pointer;padding-right:20px}
+/* remark textarea — always shows full content, grows with text */
+td.td-remark{vertical-align:top;padding-top:7px}
+td.td-remark textarea{
+  width:100%;
+  background:transparent;
+  border:1px solid transparent;
+  border-radius:6px;
+  padding:4px 7px;
+  font-family:var(--sans);
+  font-size:13px;
+  color:var(--text);
+  resize:none;
+  overflow:hidden;
+  line-height:1.5;
+  min-height:28px;
+  height:auto;
+  white-space:pre-wrap;
+  word-break:break-word;
+  transition:border .1s;
+  display:block;
+  field-sizing:content; /* modern browsers: auto-grow */
+}
+td.td-remark textarea:hover{border-color:var(--border2)}
+td.td-remark textarea:focus{outline:none;border-color:var(--accent);background:var(--surface)}
+/* remark viewer text */
+.remark-text{
+  font-size:12px;color:var(--text2);
+  white-space:pre-wrap;word-break:break-word;
+  line-height:1.5;display:block;overflow:visible;
+}
+.td-num{font-family:var(--mono);text-align:right}
+.td-field{font-size:13px}
+.td-updated{vertical-align:middle}
 .status-pill{display:inline-block;font-size:11px;font-family:var(--mono);padding:2px 8px;border-radius:20px;font-weight:500}
 .status-pending{background:rgba(245,166,35,.12);color:var(--pending)}
 .status-inprogress{background:rgba(79,163,224,.12);color:var(--inprogress)}
@@ -193,19 +229,30 @@ td select{appearance:none;cursor:pointer;padding-right:20px}
 .toast.err{background:var(--danger);color:#fff}
 
 @media(max-width:600px){
-  /* header — measure its height so we can offset sticky children */
-  .header{padding:8px 12px;gap:6px;position:sticky;top:0;z-index:50}
-  .logo{font-size:13px}
-  .tabs{width:100%;order:3}
-  .tab{flex:1;justify-content:center;font-size:11px;padding:0 8px;height:28px}
-  .user-badge{font-size:10px}
-  .btn-logout{font-size:10px;padding:0 8px;height:26px}
+  /* ── HEADER ── */
+  .header{
+    padding:8px 12px;
+    gap:0;
+    position:sticky;top:0;z-index:50;
+    display:flex;
+    flex-direction:column;
+    align-items:stretch;
+  }
+  /* row 1: logo left, user-badge + controls right — all in one flex row */
+  .header-top{display:flex;align-items:center;gap:6px;width:100%;margin-bottom:6px}
+  .logo{font-size:13px;flex-shrink:0}
+  .user-badge{font-size:10px;margin-left:auto;flex-shrink:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .header-right{display:flex;align-items:center;gap:5px;flex-shrink:0}
   .btn-theme{width:26px;height:26px;font-size:12px}
+  .btn-logout{font-size:10px;padding:0 8px;height:26px;white-space:nowrap}
+  /* row 2: tabs full width */
+  .tabs{width:100%;display:flex;gap:4px;margin-left:0}
+  .tab{flex:1;justify-content:center;font-size:11px;padding:0 6px;height:28px}
 
-  /* status bar — stick below the header */
+  /* ── STATUS BAR ── */
   .status-bar{
     position:sticky;
-    top:78px; /* approx header height on mobile (two rows) */
+    top:72px;
     z-index:40;
     padding:6px 10px;
     gap:5px;
@@ -214,7 +261,7 @@ td select{appearance:none;cursor:pointer;padding-right:20px}
   .sf-btn{height:24px;padding:0 9px;font-size:10px}
   .sync-indicator{font-size:10px}
 
-  /* toolbar */
+  /* ── TOOLBAR ── */
   .toolbar{padding:8px 10px;gap:6px;flex-direction:column;align-items:stretch}
   .toolbar-row1{display:flex;gap:6px;align-items:center;width:100%}
   .toolbar-row2{display:flex;gap:6px;align-items:center;flex-wrap:wrap;width:100%}
@@ -224,7 +271,7 @@ td select{appearance:none;cursor:pointer;padding-right:20px}
   .btn{height:30px;padding:0 10px;font-size:11px}
   .chips{display:none}
 
-  /* table → card layout on mobile */
+  /* ── TABLE → CARD LAYOUT ── */
   .table-wrap{padding:8px 10px;overflow-x:visible}
   table{min-width:0;width:100%}
   thead{display:none}
@@ -237,6 +284,8 @@ td select{appearance:none;cursor:pointer;padding-right:20px}
     padding:10px 12px;
   }
   tbody tr:last-child{border-bottom:1px solid var(--border)}
+
+  /* each cell: label on left, value on right */
   td{
     display:flex;
     align-items:flex-start;
@@ -244,7 +293,8 @@ td select{appearance:none;cursor:pointer;padding-right:20px}
     padding:5px 0;
     border:none;
     font-size:13px;
-    gap:8px;
+    gap:10px;
+    min-width:0;
   }
   td::before{
     content:attr(data-label);
@@ -254,50 +304,65 @@ td select{appearance:none;cursor:pointer;padding-right:20px}
     text-transform:uppercase;
     letter-spacing:.04em;
     flex-shrink:0;
-    min-width:64px;
-    padding-top:2px;
+    min-width:60px;
+    padding-top:3px;
   }
-  td.row-num{display:none}
-  td input,td select{text-align:right;font-size:12px;flex:1}
-  td input[type=number]{max-width:90px}
-
-  /* remark — scrollable text area in card view */
-  td[data-label="Remark"] input[type=text],
-  td[data-label="Remark"]{
-    flex-direction:column;
-    align-items:flex-start;
-  }
-  td[data-label="Remark"] input[type=text]{
-    width:100%;
-    max-width:none;
-    text-align:left;
-    white-space:normal;
-    word-break:break-word;
-  }
-  /* remark value for viewer/read-only mode */
-  td[data-label="Remark"] span,
-  td[data-label="Remark"] > *:not(::before){
-    white-space:normal;
-    word-break:break-word;
-    overflow:visible;
-    max-height:none;
-    text-overflow:unset;
-  }
-  /* make remark cell in viewer mode wrap and scroll if very long */
-  td[data-label="Remark"]{
-    flex-wrap:wrap;
-  }
-  td[data-label="Remark"]::after{
-    content:attr(data-remark);
-    white-space:normal;
-    word-break:break-word;
-    font-size:13px;
-    color:var(--text2);
+  /* all values right-aligned by default */
+  td > *:not(button){
+    text-align:right;
     flex:1;
     min-width:0;
   }
+  td input,td select{
+    text-align:right;
+    font-size:12px;
+    flex:1;
+    min-width:0;
+    max-width:none;
+    width:100%;
+  }
+  td.row-num{display:none}
+  td input[type=number]{max-width:100px}
 
-  /* summary cards */
+  /* ── REMARK — full width multiline in card ── */
+  td.td-remark{
+    flex-direction:column;
+    align-items:stretch;
+    gap:4px;
+    padding-top:5px;
+  }
+  td.td-remark::before{min-width:unset;width:100%}
+  td.td-remark textarea{
+    text-align:left;
+    width:100%;
+    background:var(--surface2);
+    border:1px solid var(--border);
+    border-radius:6px;
+    padding:6px 8px;
+    white-space:pre-wrap;
+    word-break:break-word;
+    overflow:hidden;
+    resize:none;
+    height:auto;
+    min-height:32px;
+    field-sizing:content;
+  }
+  td.td-remark .remark-text{
+    text-align:left;
+    width:100%;
+    white-space:pre-wrap;
+    word-break:break-word;
+    color:var(--text2);
+    font-size:12px;
+    line-height:1.5;
+    overflow:visible;
+  }
+  /* Updated By — stack under label too */
+  td.td-updated{flex-direction:column;align-items:stretch;gap:2px}
+  td.td-updated::before{min-width:unset;width:100%}
+  td.td-updated > div{text-align:left}
+
+  /* ── SUMMARY MINI-TABLE → CARDS ── */
   .summary-grid{padding:8px 10px}
   .store-card-header{flex-direction:column;align-items:flex-start;gap:2px;padding:8px 12px}
   .mini-table{min-width:0}
@@ -311,31 +376,39 @@ td select{appearance:none;cursor:pointer;padding-right:20px}
     padding:8px 12px;
   }
   .mini-table td{
-    display:flex;align-items:flex-start;justify-content:space-between;
-    padding:3px 0;border:none;font-size:12px;
-    white-space:normal;word-break:break-word;gap:8px;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    padding:3px 0;border:none;font-size:12px;gap:10px;min-width:0;
   }
   .mini-table td::before{
     content:attr(data-label);
     font-size:10px;font-family:var(--mono);color:var(--text3);
-    text-transform:uppercase;letter-spacing:.04em;flex-shrink:0;min-width:56px;padding-top:2px;
+    text-transform:uppercase;letter-spacing:.04em;
+    flex-shrink:0;min-width:56px;padding-top:2px;
   }
+  .mini-table td > *{text-align:right;flex:1;min-width:0}
   .mini-table td:first-child{font-size:13px;font-weight:500}
   .mini-table td.num{text-align:right}
+
+  /* remark in summary — multiline */
   .mini-table td.remark-cell{
-    white-space:normal;
+    flex-direction:column;
+    align-items:stretch;
+    gap:2px;
+    white-space:pre-wrap;
     word-break:break-word;
     overflow:visible;
     text-overflow:unset;
-    max-height:80px;
-    overflow-y:auto;
   }
+  .mini-table td.remark-cell::before{min-width:unset;width:100%}
+  .mini-table td.remark-cell > *{text-align:left}
 
-  /* overall card */
+  /* ── OVERALL CARD ── */
   .overall-card{gap:12px;padding:10px 12px}
   .overall-stat .os-val{font-size:16px}
 
-  /* admin */
+  /* ── ADMIN ── */
   .admin-section{padding:12px 14px}
   .user-row{flex-wrap:wrap;gap:6px}
   .user-row .ustores{display:none}
@@ -364,15 +437,19 @@ td select{appearance:none;cursor:pointer;padding-right:20px}
 <!-- APP -->
 <div id="appShell">
   <div class="header">
-    <div class="logo">Store<span>Log</span></div>
-    <div class="user-badge" id="userBadge"></div>
+    <div class="header-top">
+      <div class="logo">Store<span>Log</span></div>
+      <div class="user-badge" id="userBadge"></div>
+      <div class="header-right">
+        <button class="btn-theme" id="themeBtn" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
+        <button class="btn-logout" onclick="doLogout()">Sign out</button>
+      </div>
+    </div>
     <div class="tabs">
       <button class="tab active" onclick="showView('log')" id="tab-log">Daily Log</button>
       <button class="tab" onclick="showView('summary')" id="tab-summary">Summary</button>
       <button class="tab" onclick="showView('admin')" id="tab-admin" style="display:none">Admin</button>
     </div>
-    <button class="btn-theme" id="themeBtn" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
-    <button class="btn-logout" onclick="doLogout()">Sign out</button>
   </div>
 
   <!-- STATUS FILTER BAR -->
@@ -529,12 +606,11 @@ function fixStickyOffset(){
   if(window.innerWidth>600)return;
   const h=document.querySelector('.header');
   const sb=document.querySelector('.status-bar');
-  if(h&&sb) sb.style.top=h.getBoundingClientRect().height+'px';
+  if(h&&sb) sb.style.top=h.offsetHeight+'px';
 }
 window.addEventListener('resize',fixStickyOffset);
 window.addEventListener('load',fixStickyOffset);
-// also call after app renders
-function fixStickyAfterRender(){setTimeout(fixStickyOffset,100)}
+function fixStickyAfterRender(){setTimeout(fixStickyOffset,150)}
 
 /* ── THEME ── */
 function applyTheme(theme){
@@ -770,14 +846,12 @@ function toDateStr(val){
   const s=String(val).trim();
   // already plain date YYYY-MM-DD
   if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  // ISO datetime e.g. 2026-04-11T18:30:00.000Z
-  // Google Sheets stores dates as UTC midnight of previous day for IST
-  // Use local date interpretation by adding offset
+  // ISO datetime — convert using device's local timezone offset
   try{
     const d=new Date(s);
     if(isNaN(d.getTime())) return s;
-    // Add IST offset (5h30m = 330 mins) to get correct local date
-    const localMs=d.getTime()+(330*60*1000);
+    // getTimezoneOffset() returns minutes BEHIND UTC (negative for IST)
+    const localMs=d.getTime()-(d.getTimezoneOffset()*60*1000);
     const local=new Date(localMs);
     const y=local.getUTCFullYear();
     const m=String(local.getUTCMonth()+1).padStart(2,'0');
@@ -843,12 +917,12 @@ function renderLog(){
     if(!isEdit){
       return`<tr>
         <td class="row-num">${ri+1}</td>
-        <td data-label="Field" style="padding:5px 10px;font-size:13px">${esc(r.field)}</td>
-        <td data-label="Qty" style="font-family:var(--mono);text-align:right;padding:5px 10px">${r.qty||'—'}</td>
-        <td data-label="Amount" style="font-family:var(--mono);text-align:right;padding:5px 10px">&#8377;${Number(r.amount||0).toLocaleString('en-IN',{maximumFractionDigits:2})}</td>
-        <td data-label="Remark" style="color:var(--text2);font-size:12px;padding:5px 10px">${esc(r.remark||'—')}</td>
-        <td data-label="Status" style="padding:5px 10px"><span class="status-pill status-${r.status||'pending'}">${r.status||'pending'}</span></td>
-        <td data-label="Updated" style="padding:5px 10px">${updInfo}</td>
+        <td data-label="Field" class="td-field">${esc(r.field)}</td>
+        <td data-label="Qty" class="td-num">${r.qty||'—'}</td>
+        <td data-label="Amount" class="td-num">&#8377;${Number(r.amount||0).toLocaleString('en-IN',{maximumFractionDigits:2})}</td>
+        <td data-label="Remark" class="td-remark"><div class="remark-text">${esc(r.remark||'—')}</div></td>
+        <td data-label="Status" class="td-status"><span class="status-pill status-${r.status||'pending'}">${r.status||'pending'}</span></td>
+        <td data-label="Updated" class="td-updated">${updInfo}</td>
         <td></td></tr>`;
     }
     const avail=availableFields(allRows,ri);
@@ -857,17 +931,21 @@ function renderLog(){
       <td data-label="Field"><select class="field-sel" onchange="upd(${ri},'field',this.value)">${avail.map(f=>`<option${f===r.field?' selected':''}>${f}</option>`).join('')}</select></td>
       <td data-label="Qty"><input type="number" min="0" value="${r.qty||''}" placeholder="0" oninput="upd(${ri},'qty',this.value)"></td>
       <td data-label="Amount"><input type="number" min="0" step="0.01" value="${r.amount||''}" placeholder="0.00" oninput="upd(${ri},'amount',this.value)"></td>
-      <td data-label="Remark"><input type="text" value="${esc(r.remark||'')}" placeholder="Add remark…" oninput="upd(${ri},'remark',this.value)"></td>
+      <td data-label="Remark" class="td-remark"><textarea rows="1" oninput="upd(${ri},'remark',this.value);autoResize(this)" onfocus="autoResize(this)" placeholder="Add remark…">${esc(r.remark||'')}</textarea></td>
       <td data-label="Status"><select onchange="upd(${ri},'status',this.value);this.className='status-pill status-'+this.value" class="status-pill status-${r.status||'pending'}">
         <option${r.status==='pending'?' selected':''} value="pending">Pending</option>
         <option${r.status==='inprogress'?' selected':''} value="inprogress">In Progress</option>
         <option${r.status==='completed'?' selected':''} value="completed">Completed</option>
       </select></td>
-      <td data-label="Updated" style="padding:5px 10px">${updInfo}</td>
+      <td data-label="Updated" class="td-updated">${updInfo}</td>
       <td><button class="del-btn" onclick="delRow(${ri})">✕</button></td>
     </tr>`;
   }).join('');
+  // auto-resize all remark textareas after render
+  document.querySelectorAll('td.td-remark textarea').forEach(autoResize);
   renderChips(allRows);
+  // resize after browser has laid out
+  requestAnimationFrame(autoResizeAll);
 }
 function renderChips(rows){
   const qty=rows.reduce((a,r)=>a+Number(r.qty||0),0);
@@ -880,9 +958,31 @@ function renderChips(rows){
 }
 function chip(l,v){return`<div class="chip"><span class="chip-label">${l}</span><span class="chip-val">${v}</span></div>`}
 
+function autoResize(el){
+  if(!el) return;
+  // reset first so scrollHeight reflects actual content
+  el.style.height='0px';
+  el.style.height=Math.max(28,el.scrollHeight)+'px';
+}
+
+function autoResizeAll(){
+  document.querySelectorAll('td.td-remark textarea').forEach(el=>{
+    el.style.height='0px';
+    el.style.height=Math.max(28,el.scrollHeight)+'px';
+  });
+}
+
 function nowStr(){
   const d=new Date();
-  return d.toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:true});
+  // Use device's local timezone — works correctly for any user's location
+  const day=String(d.getDate()).padStart(2,'0');
+  const month=d.toLocaleString('default',{month:'short'});
+  const year=d.getFullYear();
+  const hours=d.getHours();
+  const mins=String(d.getMinutes()).padStart(2,'0');
+  const ampm=hours>=12?'pm':'am';
+  const h=String(hours%12||12).padStart(2,'0');
+  return `${day} ${month} ${year}, ${h}:${mins} ${ampm}`;
 }
 
 async function addRow(){
@@ -905,7 +1005,12 @@ function upd(i,k,v){
   rows[i].updatedBy=currentUser.username;
   rows[i].updatedAt=nowStr();
   setRows(rows);
-  if(k==='field')renderLog();else renderChips(rows);
+  const allRows=getRows();
+  if(k==='field') renderLog();
+  else{
+    updateStatusCounts(allRows);
+    renderChips(allRows);
+  }
   clearTimeout(saveTimer);
   saveTimer=setTimeout(()=>pushAllToSheet(),1500);
 }
