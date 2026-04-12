@@ -328,9 +328,7 @@ td select{appearance:none;cursor:pointer;padding-right:20px}
 
 <script>
 /* ── CONFIG ── */
-const API_KEY  = 'AIzaSyDuZP2kKm72beMthSTnc-uOwBoUNmFA4U0';
-const SHEET_ID = '1tobXlF3kBIZcuUzIK4W9BrRuoe0m7Yu42rWaFj4bBd8';
-const BASE     = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}`;
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzBmxU5fh9ht6WiCeLWCAoD1ff-UsEVHw2YxRyef9uaRyOH5Uyvo3x00UCUAGUI5uZ-Ig/exec';
 
 /* ── STATE ── */
 let currentUser=null,stores=[],fields=[],data={},users=[];
@@ -350,26 +348,39 @@ function setSyncStatus(state,text){
   document.getElementById('syncText').textContent=text;
 }
 
-/* ── SHEETS API ── */
-async function shGet(range){
-  const r=await fetch(`${BASE}/values/${encodeURIComponent(range)}?key=${API_KEY}`);
-  if(!r.ok) throw new Error(r.status);
-  return (await r.json()).values||[];
+/* ── APPS SCRIPT API ── */
+// GET — read a tab
+async function shGet(tab){
+  const url=`${SCRIPT_URL}?action=read&tab=${encodeURIComponent(tab)}`;
+  const r=await fetch(url);
+  const j=await r.json();
+  if(!j.ok) throw new Error(j.error||'Read failed');
+  return j.values||[];
 }
-async function shPut(range,values){
-  const r=await fetch(`${BASE}/values/${encodeURIComponent(range)}?valueInputOption=RAW&key=${API_KEY}`,
-    {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({range,majorDimension:'ROWS',values})});
-  if(!r.ok) throw new Error(r.status);
+
+// POST helper
+async function shPost(body){
+  // Apps Script requires no-cors for POST from file:// but works fine from https://
+  // We use a form-encoded trick to handle CORS: send as text via fetch with mode no-cors,
+  // then fall back to reading from cache. For hosted (GitHub Pages) this works fine directly.
+  const r=await fetch(SCRIPT_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain'}, // avoid preflight
+    body:JSON.stringify(body)
+  });
+  const j=await r.json();
+  if(!j.ok) throw new Error(j.error||'Write failed');
+  return j;
 }
-async function shAppend(range,values){
-  const r=await fetch(`${BASE}/values/${encodeURIComponent(range)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS&key=${API_KEY}`,
-    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({range,majorDimension:'ROWS',values})});
-  if(!r.ok) throw new Error(r.status);
+
+// WRITE — replace entire tab content
+async function shWrite(tab,rows){
+  return shPost({action:'write',tab,rows});
 }
-async function shClear(range){
-  const r=await fetch(`${BASE}/values/${encodeURIComponent(range)}:clear?key=${API_KEY}`,
-    {method:'POST',headers:{'Content-Type':'application/json'}});
-  if(!r.ok) throw new Error(r.status);
+
+// APPEND — add a single row
+async function shAppendRow(tab,row){
+  return shPost({action:'append',tab,row});
 }
 
 /* ── SYNC PULL ── */
@@ -377,7 +388,7 @@ async function syncFromSheet(showToast=false){
   setSyncStatus('syncing','Syncing…');
   try{
     // meta
-    const meta=await shGet('meta!A:B');
+    const meta=await shGet('meta');
     meta.forEach(row=>{
       if(row[0]==='stores')try{stores=JSON.parse(row[1])}catch{}
       if(row[0]==='fields')try{fields=JSON.parse(row[1])}catch{}
@@ -385,7 +396,7 @@ async function syncFromSheet(showToast=false){
     if(!stores.length)stores=['Main Store'];
     if(!fields.length)fields=['Sale','Purchase','Return','Payment','Stock Transfer','JV','Stock Item'];
     // data
-    const rows=await shGet('data!A:G');
+    const rows=await shGet('data');
     data={};
     rows.forEach((r,i)=>{
       if(i===0)return;
@@ -397,7 +408,7 @@ async function syncFromSheet(showToast=false){
     });
     // users (admin only)
     if(currentUser?.role==='admin'){
-      const ur=await shGet('users!A:D');
+      const ur=await shGet('users');
       users=[];
       ur.forEach((r,i)=>{
         if(i===0||!r[0])return;
@@ -421,20 +432,17 @@ async function pushAllToSheet(){
   setSyncStatus('syncing','Pushing…');
   try{
     // data tab
-    await shClear('data!A:G');
     const drows=[['date','store','field','qty','amount','remark','status']];
     Object.entries(data).forEach(([k,entries])=>{
       const[date,store]=k.split('__');
-      entries.forEach(r=>drows.push([date,store,r.field,r.qty,r.amount,r.remark,r.status]));
+      entries.forEach(r=>drows.push([date,store,r.field||'',r.qty||'',r.amount||'',r.remark||'',r.status||'pending']));
     });
-    await shPut('data!A1',drows);
+    await shWrite('data',drows);
     // meta tab
-    await shClear('meta!A:B');
-    await shPut('meta!A1',[['key','value'],['stores',JSON.stringify(stores)],['fields',JSON.stringify(fields)]]);
+    await shWrite('meta',[['key','value'],['stores',JSON.stringify(stores)],['fields',JSON.stringify(fields)]]);
     // users tab
-    await shClear('users!A:D');
     const urows=[['username','password','role','stores'],...users.map(u=>[u.username,u.password,u.role,u.stores.join(',')])];
-    await shPut('users!A1',urows);
+    await shWrite('users',urows);
     setSyncStatus('ok','Pushed');
     toast('All data pushed to Google Sheets');
   }catch(e){setSyncStatus('err','Push failed');toast('Push failed: '+e.message,true);}
@@ -442,15 +450,13 @@ async function pushAllToSheet(){
 
 async function saveMeta(){
   try{
-    await shClear('meta!A:B');
-    await shPut('meta!A1',[['key','value'],['stores',JSON.stringify(stores)],['fields',JSON.stringify(fields)]]);
+    await shWrite('meta',[['key','value'],['stores',JSON.stringify(stores)],['fields',JSON.stringify(fields)]]);
   }catch{}
 }
 async function saveUsersSheet(){
   try{
-    await shClear('users!A:D');
     const urows=[['username','password','role','stores'],...users.map(u=>[u.username,u.password,u.role,u.stores.join(',')])];
-    await shPut('users!A1',urows);
+    await shWrite('users',urows);
   }catch{}
 }
 
@@ -471,7 +477,7 @@ async function doLogin(){
   if(!u||!p){err.textContent='Enter username and password';return;}
   err.textContent='Checking…';
   try{
-    const ur=await shGet('users!A:D');
+    const ur=await shGet('users');
     users=[];
     ur.forEach((r,i)=>{
       if(i===0||!r[0])return;
@@ -631,7 +637,7 @@ async function addRow(){
   rows.push(nr);setRows(rows);renderLog();
   setSyncStatus('syncing','Saving…');
   try{
-    await shAppend('data!A:G',[[getDate(),getStore(),nr.field,nr.qty,nr.amount,nr.remark,nr.status]]);
+    await shAppendRow('data',[getDate(),getStore(),nr.field,nr.qty||'',nr.amount||'',nr.remark||'',nr.status]);
     setSyncStatus('ok','Saved');
   }catch{setSyncStatus('err','Save failed')}
   setTimeout(()=>{const trs=document.querySelectorAll('#logBody tr');if(trs.length)trs[trs.length-1].scrollIntoView({block:'nearest'})},50);
