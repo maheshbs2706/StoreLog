@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>StoreLog</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0f0f11;--surface:#18181c;--surface2:#1f1f25;
+  --border:#2a2a32;--border2:#36363f;
+  --accent:#d4f56a;--accent2:#a8e043;
+  --text:#f0f0f0;--text2:#8888a0;--text3:#55556a;
+  --pending:#f5a623;--inprogress:#4fa3e0;--completed:#6ed66e;--danger:#e05555;
+  --radius:10px;--mono:'DM Mono',monospace;--sans:'Sora',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;overscroll-behavior:none}
+
+/* LOGIN */
+#loginScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.login-card{background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:36px 32px;width:100%;max-width:360px}
+.login-logo{font-family:var(--mono);font-size:22px;font-weight:500;color:var(--accent);margin-bottom:6px}
+.login-logo span{color:var(--text2);font-weight:400}
+.login-sub{font-size:12px;color:var(--text3);margin-bottom:28px}
+.login-label{font-size:11px;color:var(--text2);margin-bottom:5px;display:block;font-family:var(--mono);text-transform:uppercase;letter-spacing:.04em}
+.login-input{width:100%;height:40px;padding:0 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:var(--sans);font-size:14px;margin-bottom:14px}
+.login-input:focus{outline:none;border-color:var(--accent)}
+.login-btn{width:100%;height:40px;background:var(--accent);color:#0f0f11;border:none;border-radius:var(--radius);font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;margin-top:4px}
+.login-btn:hover{background:var(--accent2)}
+.login-err{font-size:12px;color:var(--danger);margin-bottom:10px;min-height:18px}
+
+/* APP SHELL */
+#appShell{display:none;flex-direction:column;min-height:100vh}
+.header{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:50;flex-wrap:wrap}
+.logo{font-family:var(--mono);font-size:15px;font-weight:500;color:var(--accent);letter-spacing:-0.5px;white-space:nowrap}
+.logo span{color:var(--text2);font-weight:400}
+.user-badge{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:20px;background:var(--surface2);border:1px solid var(--border2);font-size:11px;font-family:var(--mono);color:var(--text2)}
+.role-tag{font-size:10px;padding:1px 6px;border-radius:10px;font-weight:500}
+.role-admin{background:rgba(212,245,106,.15);color:var(--accent)}
+.role-editor{background:rgba(79,163,224,.15);color:var(--inprogress)}
+.role-viewer{background:rgba(136,136,160,.15);color:var(--text2)}
+.tabs{display:flex;gap:4px;margin-left:auto}
+.tab{height:30px;padding:0 14px;border:1px solid var(--border2);border-radius:var(--radius);background:transparent;color:var(--text2);font-family:var(--sans);font-size:12px;cursor:pointer;transition:all .15s}
+.tab.active{background:var(--accent);color:#0f0f11;border-color:var(--accent);font-weight:600}
+.tab:not(.active):hover{color:var(--text)}
+.btn-logout{height:28px;padding:0 10px;border:1px solid var(--border2);border-radius:var(--radius);background:transparent;color:var(--text3);font-family:var(--sans);font-size:11px;cursor:pointer}
+.btn-logout:hover{color:var(--danger);border-color:var(--danger)}
+
+/* STATUS BAR */
+.status-bar{display:flex;align-items:center;gap:6px;padding:7px 16px;border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap}
+.status-bar-label{font-family:var(--mono);font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.sf-btn{height:26px;padding:0 12px;border-radius:20px;font-family:var(--mono);font-size:11px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--text2);transition:all .15s;white-space:nowrap}
+.sf-btn.sf-all.active{background:var(--text);color:var(--bg);border-color:var(--text)}
+.sf-btn.sf-pending.active{background:rgba(245,166,35,.15);color:var(--pending);border-color:var(--pending)}
+.sf-btn.sf-inprogress.active{background:rgba(79,163,224,.15);color:var(--inprogress);border-color:var(--inprogress)}
+.sf-btn.sf-completed.active{background:rgba(110,214,110,.15);color:var(--completed);border-color:var(--completed)}
+.sf-count{font-size:10px;opacity:.7;margin-left:2px}
+.sync-indicator{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text3);display:flex;align-items:center;gap:5px}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--text3)}
+.sync-dot.syncing{background:var(--pending);animation:pulse .8s infinite}
+.sync-dot.ok{background:var(--completed)}
+.sync-dot.err{background:var(--danger)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* TOOLBAR */
+.toolbar{display:flex;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center}
+.btn{height:32px;padding:0 14px;border-radius:var(--radius);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2)}
+.btn:hover{color:var(--text);border-color:var(--border2)}
+.btn-accent{background:var(--accent);color:#0f0f11;border-color:var(--accent);font-weight:600}
+.btn-accent:hover{background:var(--accent2);border-color:var(--accent2);color:#0f0f11}
+.btn-danger{border-color:var(--danger);color:var(--danger)}
+.btn-danger:hover{background:rgba(224,85,85,.1)}
+input[type=date]{height:32px;padding:0 10px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:var(--sans);font-size:13px;cursor:pointer}
+input[type=date]:focus{outline:none;border-color:var(--accent)}
+input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.7);cursor:pointer}
+.store-select-wrap{position:relative;min-width:120px;max-width:200px}
+.store-select-wrap select{width:100%;height:32px;padding:0 28px 0 10px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:var(--sans);font-size:13px;appearance:none;cursor:pointer}
+.store-select-wrap::after{content:'▾';position:absolute;right:9px;top:50%;transform:translateY(-50%);color:var(--text2);pointer-events:none;font-size:11px}
+select:focus{outline:none;border-color:var(--accent)}
+.chips{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+.chip{display:inline-flex;flex-direction:column;align-items:flex-end;padding:2px 10px;border-radius:6px;background:var(--surface2);border:1px solid var(--border)}
+.chip .chip-label{font-size:10px;color:var(--text3);font-family:var(--mono)}
+.chip .chip-val{font-size:13px;font-weight:500;font-family:var(--mono);color:var(--text)}
+
+/* TABLE */
+.table-wrap{overflow-x:auto;padding:12px 16px}
+table{width:100%;border-collapse:collapse;min-width:680px}
+thead th{font-size:11px;font-weight:500;color:var(--text3);font-family:var(--mono);padding:6px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;text-transform:uppercase;letter-spacing:.05em}
+tbody tr{border-bottom:1px solid var(--border)}
+tbody tr:hover{background:var(--surface2)}
+tbody tr:last-child{border-bottom:none}
+td{padding:5px 8px;vertical-align:middle}
+td input,td select,td textarea{width:100%;background:transparent;border:1px solid transparent;border-radius:6px;padding:4px 7px;font-family:var(--sans);font-size:13px;color:var(--text);transition:border .1s}
+td input:hover,td select:hover{border-color:var(--border2)}
+td input:focus,td select:focus{outline:none;border-color:var(--accent);background:var(--surface)}
+td select{appearance:none;cursor:pointer;padding-right:20px}
+.status-pill{display:inline-block;font-size:11px;font-family:var(--mono);padding:2px 8px;border-radius:20px;font-weight:500}
+.status-pending{background:rgba(245,166,35,.12);color:var(--pending)}
+.status-inprogress{background:rgba(79,163,224,.12);color:var(--inprogress)}
+.status-completed{background:rgba(110,214,110,.12);color:var(--completed)}
+.row-num{font-family:var(--mono);font-size:11px;color:var(--text3);width:28px;text-align:center}
+.del-btn{background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:4px 8px;border-radius:6px;transition:all .1s}
+.del-btn:hover{color:var(--danger);background:rgba(224,85,85,.1)}
+.field-sel{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 22px 4px 8px;font-family:var(--sans);font-size:13px;color:var(--text);appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2355556a'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center}
+.field-sel:focus{outline:none;border-color:var(--accent)}
+.empty-state{padding:48px 16px;text-align:center;color:var(--text3)}
+.empty-state .big{font-size:36px;margin-bottom:12px}
+.empty-state p{font-size:13px;line-height:1.6}
+
+/* SUMMARY */
+.summary-grid{padding:16px;display:grid;gap:12px}
+.store-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius)}
+.store-card-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border)}
+.store-card-header .sname{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--accent)}
+.store-card-header .stotals{font-family:var(--mono);font-size:11px;color:var(--text2)}
+.mini-table{width:100%;border-collapse:collapse;table-layout:fixed}
+.mini-table colgroup col.col-field{width:22%}
+.mini-table colgroup col.col-qty{width:12%}
+.mini-table colgroup col.col-amt{width:18%}
+.mini-table colgroup col.col-status{width:16%}
+.mini-table colgroup col.col-remark{width:32%}
+.mini-table th{font-size:10px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;padding:6px 10px;text-align:left;letter-spacing:.04em;white-space:nowrap}
+.mini-table td{font-size:12px;padding:6px 10px;border-top:1px solid var(--border);color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini-table td:first-child{color:var(--text);font-weight:500}
+.mini-table td.num{font-family:var(--mono);text-align:right;color:var(--text)}
+.mini-table th.num{text-align:right}
+.mini-table td.remark-cell{color:var(--text3);font-size:11px}
+.overall-card{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:14px 16px;display:flex;flex-wrap:wrap;gap:24px;align-items:center}
+.overall-stat .os-val{font-family:var(--mono);font-size:20px;font-weight:500;color:var(--accent);display:block}
+.overall-stat .os-key{font-family:var(--mono);font-size:10px;color:var(--text3)}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:24px;width:340px;max-width:95vw;animation:modalIn .18s ease;max-height:90vh;overflow-y:auto}
+@keyframes modalIn{from{transform:scale(.95);opacity:0}to{transform:scale(1);opacity:1}}
+.modal h4{font-size:15px;font-weight:600;margin-bottom:6px}
+.modal p{font-size:12px;color:var(--text2);margin-bottom:14px}
+.modal input,.modal select{width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:var(--sans);font-size:13px;margin-bottom:10px;height:38px}
+.modal input:focus,.modal select:focus{outline:none;border-color:var(--accent)}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+.modal-label{font-size:11px;color:var(--text2);margin-bottom:4px;display:block;font-family:var(--mono);text-transform:uppercase;letter-spacing:.04em}
+.manage-list{max-height:160px;overflow-y:auto;margin-bottom:12px}
+.manage-item{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:5px;font-size:12px;gap:8px}
+.manage-item-name{font-family:var(--mono);color:var(--text);flex:1}
+
+/* ADMIN */
+.admin-section{padding:16px 20px;border-bottom:1px solid var(--border)}
+.admin-section h3{font-size:12px;font-weight:500;color:var(--text3);margin-bottom:14px;font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em}
+.user-row{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px;flex-wrap:wrap}
+.user-row .uname{font-family:var(--mono);font-size:13px;color:var(--text);flex:1;min-width:80px}
+.user-row .ustores{font-size:11px;color:var(--text3);flex:2;min-width:100px}
+
+/* TOAST */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--accent);color:#0f0f11;font-family:var(--mono);font-size:12px;font-weight:500;padding:8px 18px;border-radius:20px;opacity:0;transition:all .25s;pointer-events:none;z-index:300;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.err{background:var(--danger);color:#fff}
+
+@media(max-width:600px){
+  .tabs{width:100%}.tab{flex:1;justify-content:center;font-size:11px}
+  .chips{display:none}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">Store<span>Log</span></div>
+    <div class="login-sub">Sign in to continue</div>
+    <label class="login-label">Username</label>
+    <input class="login-input" id="loginUser" type="text" placeholder="username" autocomplete="username">
+    <label class="login-label">Password</label>
+    <input class="login-input" id="loginPass" type="password" placeholder="••••••••" autocomplete="current-password">
+    <div class="login-err" id="loginErr"></div>
+    <button class="login-btn" onclick="doLogin()">Sign In</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="appShell">
+  <div class="header">
+    <div class="logo">Store<span>Log</span></div>
+    <div class="user-badge" id="userBadge"></div>
+    <div class="tabs">
+      <button class="tab active" onclick="showView('log')" id="tab-log">Daily Log</button>
+      <button class="tab" onclick="showView('summary')" id="tab-summary">Summary</button>
+      <button class="tab" onclick="showView('admin')" id="tab-admin" style="display:none">Admin</button>
+    </div>
+    <button class="btn-logout" onclick="doLogout()">Sign out</button>
+  </div>
+
+  <!-- STATUS FILTER BAR -->
+  <div class="status-bar">
+    <span class="status-bar-label">Filter</span>
+    <button class="sf-btn sf-all active" onclick="setStatusFilter('all')" id="sf-all">All <span class="sf-count" id="sfc-all"></span></button>
+    <button class="sf-btn sf-pending" onclick="setStatusFilter('pending')" id="sf-pending">Pending <span class="sf-count" id="sfc-pending"></span></button>
+    <button class="sf-btn sf-inprogress" onclick="setStatusFilter('inprogress')" id="sf-inprogress">In Progress <span class="sf-count" id="sfc-inprogress"></span></button>
+    <button class="sf-btn sf-completed" onclick="setStatusFilter('completed')" id="sf-completed">Completed <span class="sf-count" id="sfc-completed"></span></button>
+    <div class="sync-indicator">
+      <div class="sync-dot" id="syncDot"></div>
+      <span id="syncText">—</span>
+    </div>
+  </div>
+
+  <!-- DAILY LOG -->
+  <div id="view-log" style="display:none">
+    <div class="toolbar">
+      <input type="date" id="dateInput" onchange="onLogChange()">
+      <div class="store-select-wrap">
+        <select id="storeSelect" onchange="onLogChange()"></select>
+      </div>
+      <button class="btn btn-accent" id="btnAddEntry" onclick="addRow()">+ Add Entry</button>
+      <button class="btn" id="btnManageStores" onclick="openManage('store')" style="display:none">&#8853; Stores</button>
+      <button class="btn" id="btnManageFields" onclick="openManage('field')" style="display:none">&#8853; Fields</button>
+      <button class="btn" onclick="syncFromSheet(true)">&#8635; Sync</button>
+      <div class="chips" id="summaryChips"></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th style="width:28px">#</th>
+          <th style="width:140px">Field Type</th>
+          <th style="width:80px">Qty</th>
+          <th style="width:120px">Amount (&#8377;)</th>
+          <th>Remark</th>
+          <th style="width:120px">Status</th>
+          <th style="width:36px"></th>
+        </tr></thead>
+        <tbody id="logBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- SUMMARY -->
+  <div id="view-summary" style="display:none">
+    <div class="toolbar">
+      <input type="date" id="summDateInput" onchange="renderSummary()">
+      <div class="store-select-wrap" style="max-width:220px">
+        <select id="summStoreSelect" onchange="renderSummary()">
+          <option value="__all">All Stores</option>
+          <option value="__overall">Overall (Field-wise)</option>
+        </select>
+      </div>
+      <button class="btn" onclick="syncFromSheet(true)">&#8635; Sync</button>
+      <span style="font-size:12px;color:var(--text3);margin-left:auto" id="summLabel"></span>
+    </div>
+    <div class="summary-grid" id="summaryGrid"></div>
+  </div>
+
+  <!-- ADMIN -->
+  <div id="view-admin" style="display:none">
+    <div class="admin-section">
+      <h3>User Management</h3>
+      <div id="userList"></div>
+      <button class="btn btn-accent" onclick="openUserModal(-1)">+ Add User</button>
+    </div>
+    <div class="admin-section">
+      <h3>Stores &amp; Fields</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn" onclick="openManage('store')">&#8853; Manage Stores</button>
+        <button class="btn" onclick="openManage('field')">&#8853; Manage Fields</button>
+      </div>
+    </div>
+    <div class="admin-section">
+      <h3>Export / Import</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="btn btn-accent" onclick="exportJSON()">&#8595; Export JSON</button>
+        <button class="btn btn-accent" onclick="exportCSV()">&#8595; Export CSV</button>
+        <button class="btn" onclick="document.getElementById('importFile').click()">&#8593; Import JSON</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)">
+      </div>
+      <p style="font-size:11px;color:var(--text3)">Export saves all data as a file. Import merges data from a previously exported JSON.</p>
+    </div>
+    <div class="admin-section">
+      <h3>Google Sheets Sync</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="btn btn-accent" onclick="syncFromSheet(true)">&#8635; Pull from Sheet</button>
+        <button class="btn" onclick="pushAllToSheet()">&#8593; Push All to Sheet</button>
+      </div>
+      <p style="font-size:11px;color:var(--text3)">Pull loads latest from Google Sheets. Push overwrites the sheet with all local data.</p>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: manage stores/fields -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h4 id="modalTitle"></h4>
+    <p id="modalDesc"></p>
+    <div class="manage-list" id="manageList"></div>
+    <input type="text" id="modalInput" placeholder="">
+    <div class="modal-btns">
+      <button class="btn" onclick="closeModal()">Close</button>
+      <button class="btn btn-accent" onclick="confirmModal()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: user edit -->
+<div class="modal-overlay" id="userModal">
+  <div class="modal">
+    <h4 id="umTitle">Add User</h4>
+    <p style="font-size:12px;color:var(--text2);margin-bottom:14px">Fill in the user details. Stores: enter store names separated by commas, or just <b>all</b>.</p>
+    <label class="modal-label">Username</label>
+    <input type="text" id="umUser" placeholder="e.g. ravi">
+    <label class="modal-label">Password</label>
+    <input type="password" id="umPass" placeholder="••••••••">
+    <label class="modal-label">Role</label>
+    <select id="umRole">
+      <option value="editor">Editor — can add &amp; edit entries</option>
+      <option value="viewer">Viewer — read-only</option>
+      <option value="admin">Admin — full access</option>
+    </select>
+    <label class="modal-label">Assigned Stores</label>
+    <input type="text" id="umStores" placeholder="all  OR  Main Store, Branch A">
+    <div class="modal-btns">
+      <button class="btn" onclick="closeUserModal()">Cancel</button>
+      <button class="btn btn-danger" id="umDelBtn" onclick="deleteUser()" style="display:none">Delete</button>
+      <button class="btn btn-accent" onclick="saveUser()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ── CONFIG ── */
+const API_KEY  = 'AIzaSyDuZP2kKm72beMthSTnc-uOwBoUNmFA4U0';
+const SHEET_ID = '1tobXlF3kBIZcuUzIK4W9BrRuoe0m7Yu42rWaFj4bBd8';
+const BASE     = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}`;
+
+/* ── STATE ── */
+let currentUser=null,stores=[],fields=[],data={},users=[];
+let statusFilter='all',currentView='log',modalType='',editingUser=-1;
+let saveTimer=null;
+
+/* ── UTILS ── */
+function ls(k,v){if(v===undefined){try{return JSON.parse(localStorage.getItem(k))}catch{return null}}else localStorage.setItem(k,JSON.stringify(v))}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function toast(msg,err=false){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='toast'+(err?' err':'');t.classList.add('show');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2500);
+}
+function setSyncStatus(state,text){
+  document.getElementById('syncDot').className='sync-dot '+state;
+  document.getElementById('syncText').textContent=text;
+}
+
+/* ── SHEETS API ── */
+async function shGet(range){
+  const r=await fetch(`${BASE}/values/${encodeURIComponent(range)}?key=${API_KEY}`);
+  if(!r.ok) throw new Error(r.status);
+  return (await r.json()).values||[];
+}
+async function shPut(range,values){
+  const r=await fetch(`${BASE}/values/${encodeURIComponent(range)}?valueInputOption=RAW&key=${API_KEY}`,
+    {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({range,majorDimension:'ROWS',values})});
+  if(!r.ok) throw new Error(r.status);
+}
+async function shAppend(range,values){
+  const r=await fetch(`${BASE}/values/${encodeURIComponent(range)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS&key=${API_KEY}`,
+    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({range,majorDimension:'ROWS',values})});
+  if(!r.ok) throw new Error(r.status);
+}
+async function shClear(range){
+  const r=await fetch(`${BASE}/values/${encodeURIComponent(range)}:clear?key=${API_KEY}`,
+    {method:'POST',headers:{'Content-Type':'application/json'}});
+  if(!r.ok) throw new Error(r.status);
+}
+
+/* ── SYNC PULL ── */
+async function syncFromSheet(showToast=false){
+  setSyncStatus('syncing','Syncing…');
+  try{
+    // meta
+    const meta=await shGet('meta!A:B');
+    meta.forEach(row=>{
+      if(row[0]==='stores')try{stores=JSON.parse(row[1])}catch{}
+      if(row[0]==='fields')try{fields=JSON.parse(row[1])}catch{}
+    });
+    if(!stores.length)stores=['Main Store'];
+    if(!fields.length)fields=['Sale','Purchase','Return','Payment','Stock Transfer','JV','Stock Item'];
+    // data
+    const rows=await shGet('data!A:G');
+    data={};
+    rows.forEach((r,i)=>{
+      if(i===0)return;
+      const[date,store,field,qty,amount,remark,status]=r;
+      if(!date||!store)return;
+      const k=date+'__'+store;
+      if(!data[k])data[k]=[];
+      data[k].push({field:field||'',qty:qty||'',amount:amount||'',remark:remark||'',status:status||'pending'});
+    });
+    // users (admin only)
+    if(currentUser?.role==='admin'){
+      const ur=await shGet('users!A:D');
+      users=[];
+      ur.forEach((r,i)=>{
+        if(i===0||!r[0])return;
+        users.push({username:r[0],password:r[1]||'',role:r[2]||'viewer',stores:r[3]?r[3].split(',').map(s=>s.trim()):['all']});
+      });
+      ls('sl_users',users);
+    }
+    ls('sl_data',data);ls('sl_stores',stores);ls('sl_fields',fields);
+    setSyncStatus('ok','Synced');
+    if(showToast)toast('Synced from Google Sheets');
+    renderStores();refreshCurrentView();
+  }catch(e){
+    setSyncStatus('err','Offline');
+    if(showToast)toast('Sync failed — using local data',true);
+    loadCache();
+  }
+}
+
+/* ── SYNC PUSH ── */
+async function pushAllToSheet(){
+  setSyncStatus('syncing','Pushing…');
+  try{
+    // data tab
+    await shClear('data!A:G');
+    const drows=[['date','store','field','qty','amount','remark','status']];
+    Object.entries(data).forEach(([k,entries])=>{
+      const[date,store]=k.split('__');
+      entries.forEach(r=>drows.push([date,store,r.field,r.qty,r.amount,r.remark,r.status]));
+    });
+    await shPut('data!A1',drows);
+    // meta tab
+    await shClear('meta!A:B');
+    await shPut('meta!A1',[['key','value'],['stores',JSON.stringify(stores)],['fields',JSON.stringify(fields)]]);
+    // users tab
+    await shClear('users!A:D');
+    const urows=[['username','password','role','stores'],...users.map(u=>[u.username,u.password,u.role,u.stores.join(',')])];
+    await shPut('users!A1',urows);
+    setSyncStatus('ok','Pushed');
+    toast('All data pushed to Google Sheets');
+  }catch(e){setSyncStatus('err','Push failed');toast('Push failed: '+e.message,true);}
+}
+
+async function saveMeta(){
+  try{
+    await shClear('meta!A:B');
+    await shPut('meta!A1',[['key','value'],['stores',JSON.stringify(stores)],['fields',JSON.stringify(fields)]]);
+  }catch{}
+}
+async function saveUsersSheet(){
+  try{
+    await shClear('users!A:D');
+    const urows=[['username','password','role','stores'],...users.map(u=>[u.username,u.password,u.role,u.stores.join(',')])];
+    await shPut('users!A1',urows);
+  }catch{}
+}
+
+/* ── CACHE ── */
+function loadCache(){
+  data=ls('sl_data')||{};
+  stores=ls('sl_stores')||['Main Store'];
+  fields=ls('sl_fields')||['Sale','Purchase','Return','Payment','Stock Transfer','JV','Stock Item'];
+  users=ls('sl_users')||[];
+  renderStores();refreshCurrentView();
+}
+
+/* ── LOGIN / LOGOUT ── */
+async function doLogin(){
+  const u=document.getElementById('loginUser').value.trim();
+  const p=document.getElementById('loginPass').value;
+  const err=document.getElementById('loginErr');
+  if(!u||!p){err.textContent='Enter username and password';return;}
+  err.textContent='Checking…';
+  try{
+    const ur=await shGet('users!A:D');
+    users=[];
+    ur.forEach((r,i)=>{
+      if(i===0||!r[0])return;
+      users.push({username:r[0],password:r[1]||'',role:r[2]||'viewer',stores:r[3]?r[3].split(',').map(s=>s.trim()):['all']});
+    });
+    ls('sl_users',users);
+  }catch{
+    users=ls('sl_users')||[];
+    if(!users.length)users=[{username:'admin',password:'admin123',role:'admin',stores:['all']}];
+  }
+  const found=users.find(x=>x.username===u&&x.password===p);
+  if(!found){err.textContent='Invalid username or password';return;}
+  currentUser=found;ls('sl_currentUser',currentUser);
+  err.textContent='';
+  startApp();
+}
+
+function doLogout(){
+  currentUser=null;ls('sl_currentUser',null);
+  document.getElementById('appShell').style.display='none';
+  document.getElementById('loginScreen').style.display='flex';
+  document.getElementById('loginUser').value='';
+  document.getElementById('loginPass').value='';
+}
+
+async function startApp(){
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('appShell').style.display='flex';
+  document.getElementById('appShell').style.flexDirection='column';
+  const role=currentUser.role;
+  document.getElementById('userBadge').innerHTML=`${esc(currentUser.username)} <span class="role-tag role-${role}">${role}</span>`;
+  document.getElementById('tab-admin').style.display=role==='admin'?'':'none';
+  document.getElementById('btnAddEntry').style.display=(role==='editor'||role==='admin')?'':'none';
+  document.getElementById('btnManageStores').style.display=role==='admin'?'':'none';
+  document.getElementById('btnManageFields').style.display=role==='admin'?'':'none';
+  const today=new Date().toISOString().split('T')[0];
+  document.getElementById('dateInput').value=today;
+  document.getElementById('summDateInput').value=today;
+  showView('log');
+  await syncFromSheet();
+}
+
+/* ── STORES/FIELDS ── */
+function userStores(){
+  if(!currentUser)return stores;
+  if(currentUser.stores.includes('all'))return stores;
+  return stores.filter(s=>currentUser.stores.includes(s));
+}
+function renderStores(){
+  const allowed=userStores();
+  const s=document.getElementById('storeSelect');
+  const cur=s.value||allowed[0]||'';
+  s.innerHTML=allowed.map(x=>`<option value="${x}"${x===cur?' selected':''}>${x}</option>`).join('');
+  const ss=document.getElementById('summStoreSelect');
+  const scur=ss.value||'__all';
+  ss.innerHTML=`<option value="__all">All Stores</option><option value="__overall">Overall (Field-wise)</option>`
+    +allowed.map(x=>`<option value="${x}"${x===scur?' selected':''}>${x}</option>`).join('');
+}
+
+/* ── DATA ── */
+function getDate(){return document.getElementById('dateInput').value}
+function getStore(){return document.getElementById('storeSelect').value}
+function getSummDate(){return document.getElementById('summDateInput').value}
+function getSummStore(){return document.getElementById('summStoreSelect').value}
+function dkey(){return getDate()+'__'+getStore()}
+function getRows(){return data[dkey()]||[]}
+function setRows(rows){data[dkey()]=rows;ls('sl_data',data)}
+
+/* ── STATUS FILTER ── */
+function setStatusFilter(s){
+  statusFilter=s;
+  ['all','pending','inprogress','completed'].forEach(k=>{
+    document.getElementById('sf-'+k).className='sf-btn sf-'+k+(s===k?' active':'');
+  });
+  refreshCurrentView();
+}
+function updateStatusCounts(allRows){
+  const c={all:allRows.length,pending:0,inprogress:0,completed:0};
+  allRows.forEach(r=>{const st=r.status||'pending';if(c[st]!==undefined)c[st]++;});
+  ['all','pending','inprogress','completed'].forEach(k=>{
+    const el=document.getElementById('sfc-'+k);
+    if(el)el.textContent=c[k]>0?'('+c[k]+')':'';
+  });
+}
+function refreshCurrentView(){
+  if(currentView==='log')renderLog();
+  else if(currentView==='summary')renderSummary();
+  else if(currentView==='admin')renderAdminUsers();
+}
+
+/* ── LOG ── */
+function onLogChange(){renderLog()}
+function availableFields(rows,idx){
+  const used=new Set(rows.map((r,i)=>i!==idx?r.field:null).filter(Boolean));
+  return fields.filter(f=>!used.has(f)||rows[idx].field===f);
+}
+function renderLog(){
+  const isEdit=currentUser&&(currentUser.role==='editor'||currentUser.role==='admin');
+  const allRows=getRows();
+  const rows=statusFilter==='all'?allRows:allRows.filter(r=>(r.status||'pending')===statusFilter);
+  updateStatusCounts(allRows);
+  const body=document.getElementById('logBody');
+  if(!allRows.length){
+    body.innerHTML=`<tr><td colspan="7"><div class="empty-state"><div class="big">📋</div><p>${isEdit?'No entries yet. Click <b>+ Add Entry</b> to begin.':'No entries for this store & date.'}</p></div></td></tr>`;
+    renderChips([]);return;
+  }
+  if(!rows.length){
+    body.innerHTML=`<tr><td colspan="7"><div class="empty-state"><p>No <b>${statusFilter}</b> entries.</p></div></td></tr>`;
+    renderChips(allRows);return;
+  }
+  body.innerHTML=rows.map(r=>{
+    const ri=allRows.indexOf(r);
+    if(!isEdit){
+      return`<tr>
+        <td class="row-num">${ri+1}</td>
+        <td style="padding:5px 10px;font-size:13px">${esc(r.field)}</td>
+        <td style="font-family:var(--mono);text-align:right;padding:5px 10px">${r.qty||'—'}</td>
+        <td style="font-family:var(--mono);text-align:right;padding:5px 10px">&#8377;${Number(r.amount||0).toLocaleString('en-IN',{maximumFractionDigits:2})}</td>
+        <td style="color:var(--text2);font-size:12px;padding:5px 10px">${esc(r.remark||'—')}</td>
+        <td style="padding:5px 10px"><span class="status-pill status-${r.status||'pending'}">${r.status||'pending'}</span></td>
+        <td></td></tr>`;
+    }
+    const avail=availableFields(allRows,ri);
+    return`<tr>
+      <td class="row-num">${ri+1}</td>
+      <td><select class="field-sel" onchange="upd(${ri},'field',this.value)">${avail.map(f=>`<option${f===r.field?' selected':''}>${f}</option>`).join('')}</select></td>
+      <td><input type="number" min="0" value="${r.qty||''}" placeholder="0" oninput="upd(${ri},'qty',this.value)"></td>
+      <td><input type="number" min="0" step="0.01" value="${r.amount||''}" placeholder="0.00" oninput="upd(${ri},'amount',this.value)"></td>
+      <td><input type="text" value="${esc(r.remark||'')}" placeholder="Add remark…" oninput="upd(${ri},'remark',this.value)"></td>
+      <td><select onchange="upd(${ri},'status',this.value);this.className='status-pill status-'+this.value" class="status-pill status-${r.status||'pending'}">
+        <option${r.status==='pending'?' selected':''} value="pending">Pending</option>
+        <option${r.status==='inprogress'?' selected':''} value="inprogress">In Progress</option>
+        <option${r.status==='completed'?' selected':''} value="completed">Completed</option>
+      </select></td>
+      <td><button class="del-btn" onclick="delRow(${ri})">✕</button></td>
+    </tr>`;
+  }).join('');
+  renderChips(allRows);
+}
+function renderChips(rows){
+  const qty=rows.reduce((a,r)=>a+Number(r.qty||0),0);
+  const amt=rows.reduce((a,r)=>a+Number(r.amount||0),0);
+  const done=rows.filter(r=>r.status==='completed').length;
+  document.getElementById('summaryChips').innerHTML=
+    chip('Entries',rows.length)+chip('Qty',qty)+
+    chip('Amount','&#8377;'+amt.toLocaleString('en-IN',{maximumFractionDigits:2}))+
+    chip('Done',done+'/'+rows.length);
+}
+function chip(l,v){return`<div class="chip"><span class="chip-label">${l}</span><span class="chip-val">${v}</span></div>`}
+
+async function addRow(){
+  const rows=getRows();
+  const used=new Set(rows.map(r=>r.field));
+  const next=fields.find(f=>!used.has(f));
+  if(!next){toast('All field types already added');return;}
+  const nr={field:next,qty:'',amount:'',remark:'',status:'pending'};
+  rows.push(nr);setRows(rows);renderLog();
+  setSyncStatus('syncing','Saving…');
+  try{
+    await shAppend('data!A:G',[[getDate(),getStore(),nr.field,nr.qty,nr.amount,nr.remark,nr.status]]);
+    setSyncStatus('ok','Saved');
+  }catch{setSyncStatus('err','Save failed')}
+  setTimeout(()=>{const trs=document.querySelectorAll('#logBody tr');if(trs.length)trs[trs.length-1].scrollIntoView({block:'nearest'})},50);
+}
+function upd(i,k,v){
+  const rows=getRows();rows[i][k]=v;setRows(rows);
+  if(k==='field')renderLog();else renderChips(rows);
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>pushAllToSheet(),1500);
+}
+function delRow(i){
+  const rows=getRows();rows.splice(i,1);setRows(rows);renderLog();
+  toast('Entry removed');
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>pushAllToSheet(),1500);
+}
+
+/* ── SUMMARY ── */
+function renderSummary(){
+  const d=getSummDate(),filter=getSummStore();
+  const grid=document.getElementById('summaryGrid');
+  document.getElementById('summLabel').textContent=d||'';
+  if(!d){grid.innerHTML=`<div class="empty-state"><p>Select a date to view summary.</p></div>`;return;}
+  const allowed=userStores();
+  updateStatusCounts(allowed.flatMap(s=>data[d+'__'+s]||[]));
+  if(filter==='__overall'){renderOverall(d,grid,allowed);return;}
+  const targets=filter==='__all'?allowed:[filter];
+  let html='',hasAny=false;
+  targets.forEach(store=>{
+    const allR=data[d+'__'+store]||[];
+    const rows=statusFilter==='all'?allR:allR.filter(r=>(r.status||'pending')===statusFilter);
+    if(!rows.length)return;hasAny=true;
+    const tAmt=rows.reduce((a,r)=>a+Number(r.amount||0),0);
+    html+=`<div class="store-card">
+      <div class="store-card-header">
+        <span class="sname">${esc(store)}</span>
+        <span class="stotals">${rows.length} entries &middot; &#8377;${tAmt.toLocaleString('en-IN',{maximumFractionDigits:2})}</span>
+      </div>
+      <table class="mini-table">
+        <colgroup><col class="col-field"><col class="col-qty"><col class="col-amt"><col class="col-status"><col class="col-remark"></colgroup>
+        <thead><tr><th>Field</th><th class="num">Qty</th><th class="num">Amount</th><th>Status</th><th>Remark</th></tr></thead>
+        <tbody>${rows.map(r=>`<tr>
+          <td>${esc(r.field)}</td>
+          <td class="num">${r.qty||'—'}</td>
+          <td class="num">&#8377;${Number(r.amount||0).toLocaleString('en-IN',{maximumFractionDigits:2})}</td>
+          <td><span class="status-pill status-${r.status||'pending'}">${r.status||'pending'}</span></td>
+          <td class="remark-cell">${esc(r.remark||'—')}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+  });
+  grid.innerHTML=hasAny?html:`<div class="empty-state"><div class="big">🗂</div><p>No entries for this selection.</p></div>`;
+}
+function renderOverall(d,grid,allowed){
+  const fm={};let gQ=0,gA=0,gE=0;
+  allowed.forEach(store=>{
+    const allR=data[d+'__'+store]||[];
+    (statusFilter==='all'?allR:allR.filter(r=>(r.status||'pending')===statusFilter)).forEach(r=>{
+      const f=r.field||'Unknown';
+      if(!fm[f])fm[f]={qty:0,amount:0,count:0};
+      fm[f].qty+=Number(r.qty||0);fm[f].amount+=Number(r.amount||0);fm[f].count++;
+      gQ+=Number(r.qty||0);gA+=Number(r.amount||0);gE++;
+    });
+  });
+  if(!gE){grid.innerHTML=`<div class="empty-state"><div class="big">🗂</div><p>No entries for ${d}.</p></div>`;return;}
+  grid.innerHTML=`<div class="overall-card">
+    <div class="overall-stat"><span class="os-val">${gE}</span><span class="os-key">Total Entries</span></div>
+    <div class="overall-stat"><span class="os-val">${gQ.toLocaleString('en-IN')}</span><span class="os-key">Total Qty</span></div>
+    <div class="overall-stat"><span class="os-val">&#8377;${gA.toLocaleString('en-IN',{maximumFractionDigits:2})}</span><span class="os-key">Total Amount</span></div>
+    <div class="overall-stat"><span class="os-val">${allowed.filter(s=>(data[d+'__'+s]||[]).length>0).length}</span><span class="os-key">Active Stores</span></div>
+  </div>
+  <div class="store-card">
+    <div class="store-card-header"><span class="sname" style="color:var(--text)">Field-wise Totals</span><span class="stotals">All stores combined</span></div>
+    <table class="mini-table">
+      <colgroup><col style="width:35%"><col style="width:20%"><col style="width:25%"><col style="width:20%"></colgroup>
+      <thead><tr><th>Field Type</th><th class="num">Total Qty</th><th class="num">Total Amount</th><th class="num">Entries</th></tr></thead>
+      <tbody>${Object.entries(fm).map(([f,v])=>`<tr>
+        <td>${esc(f)}</td><td class="num">${v.qty||'—'}</td>
+        <td class="num">&#8377;${v.amount.toLocaleString('en-IN',{maximumFractionDigits:2})}</td>
+        <td class="num" style="color:var(--text2)">${v.count}</td>
+      </tr>`).join('')}</tbody>
+    </table>
+  </div>`;
+}
+
+/* ── VIEW SWITCH ── */
+function showView(v){
+  currentView=v;
+  ['log','summary','admin'].forEach(n=>{
+    document.getElementById('view-'+n).style.display=v===n?'':'none';
+    const t=document.getElementById('tab-'+n);if(t)t.className='tab'+(v===n?' active':'');
+  });
+  refreshCurrentView();
+}
+
+/* ── MANAGE MODAL ── */
+function openManage(type){
+  modalType=type;
+  const list=type==='store'?stores:fields;
+  document.getElementById('modalTitle').textContent=type==='store'?'Manage Stores':'Manage Field Types';
+  document.getElementById('modalDesc').textContent=type==='store'?'Add or remove store names.':'Add or remove transaction field types.';
+  document.getElementById('modalInput').placeholder=type==='store'?'e.g. South Branch':'e.g. Expense';
+  document.getElementById('modalInput').value='';
+  document.getElementById('manageList').innerHTML=list.map((item,i)=>`
+    <div class="manage-item">
+      <span class="manage-item-name">${esc(item)}</span>
+      <button class="del-btn" onclick="removeItem(${i})">✕</button>
+    </div>`).join('');
+  document.getElementById('modal').classList.add('open');
+  setTimeout(()=>document.getElementById('modalInput').focus(),100);
+}
+function closeModal(){document.getElementById('modal').classList.remove('open')}
+function confirmModal(){
+  const val=document.getElementById('modalInput').value.trim();if(!val)return;
+  if(modalType==='store'){if(!stores.includes(val)){stores.push(val);ls('sl_stores',stores);renderStores();saveMeta();toast('Store added')}}
+  else{if(!fields.includes(val)){fields.push(val);ls('sl_fields',fields);saveMeta();toast('Field added')}}
+  openManage(modalType);
+}
+function removeItem(i){
+  if(modalType==='store'){if(stores.length<=1){toast('Need at least one store');return}stores.splice(i,1);ls('sl_stores',stores);renderStores();saveMeta();}
+  else{if(fields.length<=1){toast('Need at least one field');return}fields.splice(i,1);ls('sl_fields',fields);saveMeta();}
+  openManage(modalType);
+}
+document.getElementById('modal').addEventListener('click',e=>{if(e.target===document.getElementById('modal'))closeModal()});
+document.getElementById('modalInput').addEventListener('keydown',e=>{if(e.key==='Enter')confirmModal()});
+
+/* ── ADMIN: USERS ── */
+function renderAdminUsers(){
+  const list=document.getElementById('userList');
+  if(!users.length){list.innerHTML=`<p style="color:var(--text3);font-size:12px;margin-bottom:12px">No users yet.</p>`;return;}
+  list.innerHTML=users.map((u,i)=>`
+    <div class="user-row">
+      <span class="uname">${esc(u.username)}</span>
+      <span class="role-tag role-${u.role}">${u.role}</span>
+      <span class="ustores">${esc(u.stores.join(', '))}</span>
+      <button class="btn" style="height:26px;font-size:11px;padding:0 10px" onclick="openUserModal(${i})">Edit</button>
+    </div>`).join('');
+}
+function openUserModal(idx){
+  editingUser=idx;
+  document.getElementById('umTitle').textContent=idx===-1?'Add User':'Edit User';
+  document.getElementById('umDelBtn').style.display=idx===-1?'none':'';
+  if(idx===-1){
+    document.getElementById('umUser').value='';
+    document.getElementById('umPass').value='';
+    document.getElementById('umRole').value='editor';
+    document.getElementById('umStores').value='all';
+  }else{
+    const u=users[idx];
+    document.getElementById('umUser').value=u.username;
+    document.getElementById('umPass').value=u.password;
+    document.getElementById('umRole').value=u.role;
+    document.getElementById('umStores').value=u.stores.join(', ');
+  }
+  document.getElementById('userModal').classList.add('open');
+}
+function closeUserModal(){document.getElementById('userModal').classList.remove('open')}
+async function saveUser(){
+  const username=document.getElementById('umUser').value.trim();
+  const password=document.getElementById('umPass').value.trim();
+  const role=document.getElementById('umRole').value;
+  const stRaw=document.getElementById('umStores').value.trim();
+  if(!username||!password){toast('Username and password required',true);return;}
+  const stList=stRaw==='all'?['all']:stRaw.split(',').map(s=>s.trim()).filter(Boolean);
+  const u={username,password,role,stores:stList};
+  if(editingUser===-1){
+    if(users.find(x=>x.username===username)){toast('Username already exists',true);return;}
+    users.push(u);
+  }else{users[editingUser]=u;}
+  ls('sl_users',users);
+  await saveUsersSheet();
+  closeUserModal();renderAdminUsers();
+  toast(editingUser===-1?'User added':'User updated');
+}
+async function deleteUser(){
+  if(editingUser===-1)return;
+  if(users[editingUser].username===currentUser.username){toast('Cannot delete yourself',true);return;}
+  users.splice(editingUser,1);ls('sl_users',users);
+  await saveUsersSheet();closeUserModal();renderAdminUsers();toast('User deleted');
+}
+document.getElementById('userModal').addEventListener('click',e=>{if(e.target===document.getElementById('userModal'))closeUserModal()});
+
+/* ── EXPORT / IMPORT ── */
+function exportJSON(){
+  const payload={exportedAt:new Date().toISOString(),stores,fields,data};
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
+  a.download=`storelog-${new Date().toISOString().split('T')[0]}.json`;
+  a.click();toast('JSON exported');
+}
+function exportCSV(){
+  let csv='Date,Store,Field,Qty,Amount,Remark,Status\n';
+  Object.entries(data).forEach(([k,rows])=>{
+    const[date,store]=k.split('__');
+    rows.forEach(r=>{csv+=`"${date}","${store}","${r.field||''}","${r.qty||''}","${r.amount||''}","${(r.remark||'').replace(/"/g,'""')}","${r.status||''}"\n`;});
+  });
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=`storelog-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();toast('CSV exported');
+}
+async function importJSON(event){
+  const file=event.target.files[0];if(!file)return;
+  try{
+    const payload=JSON.parse(await file.text());
+    if(payload.stores)stores=payload.stores;
+    if(payload.fields)fields=payload.fields;
+    if(payload.data)data={...data,...payload.data};
+    ls('sl_stores',stores);ls('sl_fields',fields);ls('sl_data',data);
+    renderStores();refreshCurrentView();
+    await pushAllToSheet();
+    toast('Import successful — pushed to sheet');
+  }catch(e){toast('Import failed: '+e.message,true);}
+  event.target.value='';
+}
+
+/* ── INIT ── */
+(function(){
+  const saved=ls('sl_currentUser');
+  if(saved?.username){currentUser=saved;startApp();}
+})();
+</script>
+</body>
+</html>
