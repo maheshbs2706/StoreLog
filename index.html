@@ -86,6 +86,9 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .sync-dot.err{background:var(--danger)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 
+/* TOOLBAR ROWS */
+.toolbar-row1,.toolbar-row2{display:contents}
+
 /* TOOLBAR */
 .toolbar{display:flex;gap:8px;padding:10px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center}
 .btn{height:32px;padding:0 14px;border-radius:var(--radius);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2)}
@@ -206,9 +209,12 @@ td select{appearance:none;cursor:pointer;padding-right:20px}
   .sync-indicator{font-size:10px}
 
   /* toolbar */
-  .toolbar{padding:8px 10px;gap:6px}
-  .toolbar input[type=date]{height:30px;font-size:12px;min-width:0;flex:1}
-  .store-select-wrap{min-width:0;flex:1;max-width:none}
+  .toolbar{padding:8px 10px;gap:6px;flex-direction:column;align-items:stretch}
+  .toolbar-row1{display:flex;gap:6px;align-items:center;width:100%}
+  .toolbar-row2{display:flex;gap:6px;align-items:center;flex-wrap:wrap;width:100%}
+  .toolbar-row1 input[type=date]{height:32px;font-size:12px;min-width:0;flex:0 0 auto}
+  .toolbar-row1 .store-select-wrap{min-width:0;flex:1;max-width:none}
+  .toolbar-row2 .btn{height:30px;padding:0 12px;font-size:12px}
   .btn{height:30px;padding:0 10px;font-size:11px}
   .chips{display:none}
 
@@ -335,15 +341,19 @@ td select{appearance:none;cursor:pointer;padding-right:20px}
   <!-- DAILY LOG -->
   <div id="view-log" style="display:none">
     <div class="toolbar">
-      <input type="date" id="dateInput" onchange="onLogChange()">
-      <div class="store-select-wrap">
-        <select id="storeSelect" onchange="onLogChange()"></select>
+      <div class="toolbar-row1">
+        <input type="date" id="dateInput" onchange="onLogChange()">
+        <div class="store-select-wrap">
+          <select id="storeSelect" onchange="onLogChange()"></select>
+        </div>
       </div>
-      <button class="btn btn-accent" id="btnAddEntry" onclick="addRow()">+ Add Entry</button>
-      <button class="btn" id="btnManageStores" onclick="openManage('store')" style="display:none">&#8853; Stores</button>
-      <button class="btn" id="btnManageFields" onclick="openManage('field')" style="display:none">&#8853; Fields</button>
-      <button class="btn" onclick="syncFromSheet(true)">&#8635; Sync</button>
-      <div class="chips" id="summaryChips"></div>
+      <div class="toolbar-row2">
+        <button class="btn btn-accent" id="btnAddEntry" onclick="addRow()">+ Add Entry</button>
+        <button class="btn" id="btnManageStores" onclick="openManage('store')" style="display:none">&#8853; Stores</button>
+        <button class="btn" id="btnManageFields" onclick="openManage('field')" style="display:none">&#8853; Fields</button>
+        <button class="btn" onclick="syncFromSheet(true)">&#8635; Sync</button>
+        <div class="chips" id="summaryChips"></div>
+      </div>
     </div>
     <div class="table-wrap">
       <table>
