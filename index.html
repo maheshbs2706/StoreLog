@@ -237,6 +237,11 @@ td.td-remark textarea:focus{outline:none;border-color:var(--accent);background:v
 .backup-card .bk-meta{font-size:11px;color:var(--text3);flex:2;min-width:100px}
 .backup-card .bk-actions{display:flex;gap:6px;flex-shrink:0}
 
+/* BUSY / LOADING STATE */
+.btn[disabled],.btn.busy{opacity:.55;cursor:not-allowed;pointer-events:none}
+.btn.busy::after{content:'';display:inline-block;width:10px;height:10px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite;margin-left:6px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+
 /* TOAST */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--accent);color:#0f0f11;font-family:var(--mono);font-size:12px;font-weight:500;padding:8px 18px;border-radius:20px;opacity:0;transition:all .25s;pointer-events:none;z-index:300;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -546,9 +551,9 @@ td.td-remark textarea:focus{outline:none;border-color:var(--accent);background:v
     <div class="admin-section">
       <h3>Export / Import</h3>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-        <button class="btn btn-accent" onclick="exportJSON()">&#8595; Export JSON</button>
-        <button class="btn btn-accent" onclick="exportCSV()">&#8595; Export CSV</button>
-        <button class="btn" onclick="document.getElementById('importFile').click()">&#8593; Import JSON</button>
+        <button class="btn btn-accent" id="btnExportJSON" onclick="exportJSON()">&#8595; Export JSON</button>
+        <button class="btn btn-accent" id="btnExportCSV" onclick="exportCSV()">&#8595; Export CSV</button>
+        <button class="btn" id="btnImportJSON" onclick="document.getElementById('importFile').click()">&#8593; Import JSON</button>
         <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)">
       </div>
       <p style="font-size:11px;color:var(--text3)">Export saves all data as a file. Import merges data from a previously exported JSON.</p>
@@ -556,17 +561,17 @@ td.td-remark textarea:focus{outline:none;border-color:var(--accent);background:v
     <div class="admin-section">
       <h3>Backups</h3>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
-        <button class="btn btn-accent" onclick="createBackup()">&#9711; Create Backup</button>
-        <button class="btn" onclick="loadBackupList()">&#8635; Refresh List</button>
+        <button class="btn btn-accent" id="btnCreateBackup" onclick="createBackup()">&#9711; Create Backup</button>
+        <button class="btn" id="btnRefreshBackups" onclick="loadBackupList()">&#8635; Refresh List</button>
       </div>
       <div id="backupList"><p style="font-size:12px;color:var(--text3)">Click "Refresh List" to see saved backups.</p></div>
     </div>
     <div class="admin-section">
       <h3>Google Sheets Sync</h3>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-        <button class="btn btn-accent" onclick="syncFromSheet(true)">&#8635; Pull from Sheet</button>
-        <button class="btn" onclick="pushAllToSheet()">&#8593; Push All to Sheet</button>
-        <button class="btn btn-danger" onclick="cleanAndPush()">&#9881; Deduplicate &amp; Push</button>
+        <button class="btn btn-accent" id="btnPullSheet" onclick="syncFromSheet(true)">&#8635; Pull from Sheet</button>
+        <button class="btn" id="btnPushSheet" onclick="pushAllToSheet()">&#8593; Push All to Sheet</button>
+        <button class="btn btn-danger" id="btnDedup" onclick="cleanAndPush()">&#9881; Deduplicate &amp; Push</button>
       </div>
       <p style="font-size:11px;color:var(--text3)">Pull loads latest from Google Sheets. Push overwrites the sheet with all local data.</p>
     </div>
@@ -686,6 +691,34 @@ function setSyncStatus(state,text){
   document.getElementById('syncText').textContent=text;
 }
 
+// Disable all action buttons during async operations
+const ACTION_BTNS=[
+  'btnCreateBackup','btnRefreshBackups',
+  'btnPullSheet','btnPushSheet','btnDedup',
+  'btnExportJSON','btnExportCSV','btnImportJSON',
+  'btnAddEntry'
+];
+function setBusy(btnId,label){
+  ACTION_BTNS.forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){el.disabled=true;el.classList.add('busy' in el.dataset?'':'disabled');}
+  });
+  if(btnId){
+    const el=document.getElementById(btnId);
+    if(el){el.classList.add('busy');el._origText=el.innerHTML;}
+  }
+}
+function setIdle(btnId){
+  ACTION_BTNS.forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){el.disabled=false;el.classList.remove('disabled');}
+  });
+  if(btnId){
+    const el=document.getElementById(btnId);
+    if(el){el.classList.remove('busy');if(el._origText)el.innerHTML=el._origText;}
+  }
+}
+
 /* ── APPS SCRIPT API ── */
 // GET — read a tab (Apps Script redirects GETs, must follow redirect)
 async function shGet(tab){
@@ -725,6 +758,7 @@ async function shAppendRow(tab,row){
 
 /* ── SYNC PULL — always from sheet, no localStorage fallback ── */
 async function syncFromSheet(showToast=false){
+  setBusy('btnPullSheet');
   setSyncStatus('syncing','Syncing…');
   try{
     // ── meta ──
@@ -766,14 +800,14 @@ async function syncFromSheet(showToast=false){
   }catch(e){
     setSyncStatus('err','Sync failed');
     toast('Could not reach Google Sheets: '+e.message,true);
-    // show empty state — do NOT load stale localStorage data
     data={};stores=['Main Store'];fields=['Sale','Purchase','Return','Payment','Stock Transfer','JV','Stock Item'];
     renderStores();refreshCurrentView();
-  }
+  }finally{setIdle('btnPullSheet');}
 }
 
 /* ── SYNC PUSH ── */
 async function pushAllToSheet(){
+  setBusy('btnPushSheet');
   setSyncStatus('syncing','Pushing…');
   try{
     const drows=[['date','store','field','qty','amount','remark','status','updatedBy','updatedAt']];
@@ -790,22 +824,25 @@ async function pushAllToSheet(){
     setSyncStatus('ok','Pushed');
     toast('All data pushed to Google Sheets');
   }catch(e){setSyncStatus('err','Push failed');toast('Push failed: '+e.message,true);}
+  finally{setIdle('btnPushSheet');}
 }
 
 // Deduplicate: per date+store, keep only one row per field type (last one wins)
 async function cleanAndPush(){
   if(!confirm('This will deduplicate all data (keep last entry per field per store per date) and push to sheet. Continue?')) return;
+  setBusy('btnDedup');
   const cleaned={};
   Object.entries(data).forEach(([k,entries])=>{
     const seen={};
-    // last entry per field wins
     entries.forEach(r=>{ seen[r.field]=r; });
     cleaned[k]=Object.values(seen);
   });
   data=cleaned;
   renderLog();
-  await pushAllToSheet();
-  toast('Deduplicated and pushed to sheet');
+  try{
+    await pushAllToSheet();
+    toast('Deduplicated and pushed to sheet');
+  }finally{setIdle('btnDedup');}
 }
 
 async function saveMeta(){
@@ -1294,6 +1331,7 @@ function exportCSV(){
 }
 async function importJSON(event){
   const file=event.target.files[0];if(!file)return;
+  setBusy('btnImportJSON');
   try{
     const payload=JSON.parse(await file.text());
     if(payload.stores)stores=payload.stores;
@@ -1303,7 +1341,7 @@ async function importJSON(event){
     await pushAllToSheet();
     toast('Import successful — pushed to sheet');
   }catch(e){toast('Import failed: '+e.message,true);}
-  event.target.value='';
+  finally{setIdle('btnImportJSON');event.target.value='';}
 }
 /* ── BACKUPS ── */
 /* ── BACKUPS ── */
@@ -1331,24 +1369,26 @@ function toLocalDisplay(val){
 }
 
 async function createBackup(){
+  setBusy('btnCreateBackup');
   setSyncStatus('syncing','Creating backup…');
   try{
     const id='BK-'+Date.now();
-    const label=nowStr(); // local time label
-    const createdAt=nowStr(); // local time — no more ISO string
+    const label=nowStr();
+    const createdAt=nowStr();
     const blob=JSON.stringify({stores,fields,data});
     const totalRows=Object.values(data).reduce((a,r)=>a+r.length,0);
     await shAppendRow('backups',[id,label,currentUser.username,createdAt,totalRows,blob]);
     setSyncStatus('ok','Backup saved');
     toast('Backup created: '+label);
-    loadBackupList();
+    await loadBackupList();
   }catch(e){
     setSyncStatus('err','Backup failed');
     toast('Backup failed: '+e.message,true);
-  }
+  }finally{setIdle('btnCreateBackup');}
 }
 
 async function loadBackupList(){
+  setBusy('btnRefreshBackups');
   const el=document.getElementById('backupList');
   el.innerHTML=`<p style="font-size:12px;color:var(--text3)">Loading…</p>`;
   try{
@@ -1376,7 +1416,7 @@ async function loadBackupList(){
     }).join('');
   }catch(e){
     el.innerHTML=`<p style="font-size:12px;color:var(--danger)">Failed to load: ${esc(e.message)}</p>`;
-  }
+  }finally{setIdle('btnRefreshBackups');}
 }
 
 function downloadBackup(idx){
@@ -1410,6 +1450,7 @@ async function confirmRestore(){
   const row=cachedBackupRows[pendingRestoreId];
   if(!row){toast('Backup not found — refresh the list and try again',true);closeBackupModal();return;}
   closeBackupModal();
+  setBusy('btnCreateBackup');
   setSyncStatus('syncing','Restoring…');
   try{
     const blob=row[5];
@@ -1424,7 +1465,7 @@ async function confirmRestore(){
   }catch(e){
     setSyncStatus('err','Restore failed');
     toast('Restore failed: '+e.message,true);
-  }
+  }finally{setIdle('btnCreateBackup');}
 }
 document.getElementById('backupModal').addEventListener('click',e=>{if(e.target===document.getElementById('backupModal'))closeBackupModal()});
 
