@@ -1306,18 +1306,39 @@ async function importJSON(event){
   event.target.value='';
 }
 /* ── BACKUPS ── */
-// Backups are stored in a 'backups' sheet tab
-// Each row: [ backupId, label, createdBy, createdAt, jsonBlob ]
+/* ── BACKUPS ── */
 let pendingRestoreId=null;
+let cachedBackupRows=[];
+
+// Convert any date value (ISO or already formatted) to local display string
+function toLocalDisplay(val){
+  if(!val) return '—';
+  const s=String(val).trim();
+  // already human-formatted (e.g. "13 Apr 2026, 06:59 pm") — return as-is
+  if(!/^\d{4}-/.test(s)&&!/Z$/.test(s)&&!/T\d{2}:/.test(s)) return s;
+  try{
+    const d=new Date(s);
+    if(isNaN(d.getTime())) return s;
+    const day=String(d.getDate()).padStart(2,'0');
+    const month=d.toLocaleString('default',{month:'short'});
+    const year=d.getFullYear();
+    const h=d.getHours();
+    const mins=String(d.getMinutes()).padStart(2,'0');
+    const ampm=h>=12?'pm':'am';
+    const hr=String(h%12||12).padStart(2,'0');
+    return `${day} ${month} ${year}, ${hr}:${mins} ${ampm}`;
+  }catch{return s;}
+}
 
 async function createBackup(){
   setSyncStatus('syncing','Creating backup…');
   try{
     const id='BK-'+Date.now();
-    const label=nowStr();
+    const label=nowStr(); // local time label
+    const createdAt=nowStr(); // local time — no more ISO string
     const blob=JSON.stringify({stores,fields,data});
     const totalRows=Object.values(data).reduce((a,r)=>a+r.length,0);
-    await shAppendRow('backups',[id,label,currentUser.username,new Date().toISOString(),totalRows,blob]);
+    await shAppendRow('backups',[id,label,currentUser.username,createdAt,totalRows,blob]);
     setSyncStatus('ok','Backup saved');
     toast('Backup created: '+label);
     loadBackupList();
@@ -1332,38 +1353,38 @@ async function loadBackupList(){
   el.innerHTML=`<p style="font-size:12px;color:var(--text3)">Loading…</p>`;
   try{
     const rows=await shGet('backups');
-    const dataRows=rows.slice(1).filter(r=>r[0]); // skip header
-    if(!dataRows.length){
+    cachedBackupRows=rows.slice(1).filter(r=>r[0]&&String(r[0]).startsWith('BK-'));
+    if(!cachedBackupRows.length){
       el.innerHTML=`<p style="font-size:12px;color:var(--text3)">No backups yet. Click "Create Backup" to save one.</p>`;
       return;
     }
-    // show newest first
-    const sorted=[...dataRows].reverse();
-    el.innerHTML=sorted.map(r=>{
+    el.innerHTML=[...cachedBackupRows].reverse().map((r,revIdx)=>{
+      const realIdx=cachedBackupRows.length-1-revIdx;
       const[id,label,by,at,totalRows]=r;
+      // show label if it looks like a readable string, otherwise convert at
+      const displayTime=toLocalDisplay(label)||toLocalDisplay(at)||id;
       return`<div class="backup-card">
-        <div>
-          <div class="bk-label">${esc(label)}</div>
-          <div class="bk-meta">by ${esc(by)} &nbsp;·&nbsp; ${totalRows||'?'} entries</div>
+        <div style="flex:1;min-width:0">
+          <div class="bk-label">${esc(displayTime)}</div>
+          <div class="bk-meta">by ${esc(by||'?')} &nbsp;·&nbsp; ${totalRows||'?'} entries</div>
         </div>
         <div class="bk-actions">
-          <button class="btn" style="height:26px;font-size:11px;padding:0 10px" onclick="downloadBackup('${esc(id)}')">&#8595; Download</button>
-          <button class="btn btn-danger" style="height:26px;font-size:11px;padding:0 10px" onclick="openRestoreModal('${esc(id)}','${esc(label)}')">&#8635; Restore</button>
+          <button class="btn" style="height:26px;font-size:11px;padding:0 10px" onclick="downloadBackup(${realIdx})">&#8595; Download</button>
+          <button class="btn btn-danger" style="height:26px;font-size:11px;padding:0 10px" onclick="openRestoreModal(${realIdx})">&#8635; Restore</button>
         </div>
       </div>`;
     }).join('');
   }catch(e){
-    el.innerHTML=`<p style="font-size:12px;color:var(--danger)">Failed to load backups: ${esc(e.message)}</p>`;
+    el.innerHTML=`<p style="font-size:12px;color:var(--danger)">Failed to load: ${esc(e.message)}</p>`;
   }
 }
 
-async function downloadBackup(id){
+function downloadBackup(idx){
+  const row=cachedBackupRows[idx];
+  if(!row){toast('Backup not found — refresh the list',true);return;}
+  const[id,label,by,at,totalRows,blob]=row;
   try{
-    const rows=await shGet('backups');
-    const row=rows.find(r=>r[0]===id);
-    if(!row){toast('Backup not found',true);return;}
-    const[,label,by,,totalRows,blob]=row;
-    const payload={backupId:id,label,createdBy:by,totalRows,...JSON.parse(blob)};
+    const payload={backupId:id,label,createdBy:by,createdAt:at,totalRows,...JSON.parse(blob)};
     const a=document.createElement('a');
     a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
     a.download=`storelog-backup-${id}.json`;
@@ -1372,9 +1393,12 @@ async function downloadBackup(id){
   }catch(e){toast('Download failed: '+e.message,true);}
 }
 
-function openRestoreModal(id,label){
-  pendingRestoreId=id;
-  document.getElementById('backupModalDesc').textContent=`Restore backup: "${label}"`;
+function openRestoreModal(idx){
+  const row=cachedBackupRows[idx];
+  if(!row){toast('Backup not found — refresh the list',true);return;}
+  pendingRestoreId=idx;
+  const displayTime=toLocalDisplay(row[1])||toLocalDisplay(row[3])||row[0];
+  document.getElementById('backupModalDesc').textContent=`Restore backup: "${displayTime}"`;
   document.getElementById('backupModal').classList.add('open');
 }
 function closeBackupModal(){
@@ -1382,13 +1406,12 @@ function closeBackupModal(){
   document.getElementById('backupModal').classList.remove('open');
 }
 async function confirmRestore(){
-  if(!pendingRestoreId)return;
+  if(pendingRestoreId===null)return;
+  const row=cachedBackupRows[pendingRestoreId];
+  if(!row){toast('Backup not found — refresh the list and try again',true);closeBackupModal();return;}
   closeBackupModal();
   setSyncStatus('syncing','Restoring…');
   try{
-    const rows=await shGet('backups');
-    const row=rows.find(r=>r[0]===pendingRestoreId);
-    if(!row){toast('Backup not found',true);return;}
     const blob=row[5];
     const payload=JSON.parse(blob);
     if(payload.stores)stores=payload.stores;
