@@ -8,16 +8,18 @@ A daily business logging app for tracking store-level transactions — sales, pu
 
 - **Multi-store support** — log entries per store per date
 - **Flexible field types** — Sale, Purchase, Return, Payment, Stock Transfer, JV, Stock Item — add new ones anytime
-- **Per-entry tracking** — Qty, Amount, Remark, Status (Pending / In Progress / Completed)
-- **Activity log** — every entry records who added or edited it and when
-- **Status filter bar** — filter by All / Pending / In Progress / Completed across both tabs
-- **Summary view** — view by store, all stores, or field-wise overall totals
-- **User management** — Admin, Editor, Viewer roles with per-store access control
+- **Per-entry tracking** — Qty, Amount, Remark (multi-line), Status (Pending / In Progress / Completed)
+- **Activity log** — every entry records who added or edited it and when, in device local time
+- **Status filter bar** — filter by All / Pending / In Progress / Completed across both tabs, with live counts
+- **Summary view** — view by store, all stores, or field-wise overall totals for any date
+- **User management** — Admin, Editor, Viewer roles with per-store access control via checkbox list
 - **Google Sheets sync** — all data lives in Google Sheets, fetched fresh on every login
+- **Backups** — create named backup snapshots, restore to any previous state with one click
 - **Export** — download all data as JSON or CSV
-- **Import** — restore data from a previously exported JSON file
+- **Import** — restore or merge data from a previously exported JSON file
+- **Action locking** — all action buttons disable and show a spinner during async operations to prevent double-clicks
 - **Light & Dark theme** — toggle anytime, preference saved in browser
-- **Mobile friendly** — works in Chrome and Safari on any device
+- **Mobile friendly** — card-per-row layout on small screens, sticky header and filter bar, no horizontal scrolling
 
 ---
 
@@ -46,14 +48,14 @@ storelog/
 
 ## Google Sheet Structure
 
-Create a Google Sheet with **3 tabs** named exactly as below:
+Create a Google Sheet with **4 tabs** named exactly as below:
 
 ### `data` tab
 Stores all daily log entries.
 
 | date | store | field | qty | amount | remark | status | updatedBy | updatedAt |
 |---|---|---|---|---|---|---|---|---|
-| 2026-04-12 | Main Store | Sale | 10 | 5000 | cash sale | completed | admin | 12 Apr, 10:30 am |
+| 2026-04-12 | Main Store | Sale | 10 | 5000 | cash sale | completed | admin | 12 Apr 2026, 10:30 am |
 
 ### `users` tab
 Stores user accounts and roles.
@@ -65,19 +67,27 @@ Stores user accounts and roles.
 | priya | password456 | viewer | all |
 
 **Roles:**
-- `admin` — full access, user management, export/import
-- `editor` — can add and edit entries for assigned stores
+- `admin` — full access, user management, backups, export/import, all stores
+- `editor` — can add and edit entries for their assigned stores only
 - `viewer` — read-only access to assigned stores
 
-**Stores column:** use `all` for all stores, or comma-separated store names for specific access.
+**Stores column:** use `all` for access to all stores, or comma-separated store names for specific access (e.g. `Main Store, Branch A`).
 
 ### `meta` tab
-Stores configuration (stores list and field types). Managed automatically by the app.
+Stores configuration — stores list and field types. Managed automatically by the app.
 
 | key | value |
 |---|---|
 | stores | ["Main Store","Branch A"] |
 | fields | ["Sale","Purchase","Return","Payment","Stock Transfer","JV","Stock Item"] |
+
+### `backups` tab
+Stores backup snapshots created from the Admin panel. Add this header row manually:
+
+| id | label | createdBy | createdAt | totalRows | jsonBlob |
+|---|---|---|---|---|---|
+
+Leave the remaining rows empty — the app fills them in when you create backups.
 
 ---
 
@@ -87,8 +97,8 @@ Stores configuration (stores list and field types). Managed automatically by the
 
 1. Go to [sheets.google.com](https://sheets.google.com) and create a new spreadsheet
 2. Rename the default sheet tab to `data`
-3. Create two more tabs named `users` and `meta`
-4. Add the headers to each tab as shown above
+3. Create three more tabs named `users`, `meta`, and `backups`
+4. Add the header rows to each tab as shown above
 5. Add your first admin user in the `users` tab row 2
 
 ### Step 2 — Set Up Google Apps Script
@@ -98,7 +108,7 @@ Stores configuration (stores list and field types). Managed automatically by the
 3. Paste the contents of `storelog-apps-script.gs`
 4. Replace `YOUR_SHEET_ID_HERE` with your actual Google Sheet ID
    - The Sheet ID is in the URL: `https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID_HERE/edit`
-5. Press **Ctrl+S** to save, name the project `StoreLog`
+5. Press **Ctrl+S** to save and name the project `StoreLog`
 
 ### Step 3 — Deploy the Apps Script
 
@@ -109,9 +119,9 @@ Stores configuration (stores list and field types). Managed automatically by the
    - **Who has access:** Anyone
 4. Click **Deploy**
 5. Click **Authorize access** → choose your Google account → Allow
-6. Copy the **Web App URL** (looks like `https://script.google.com/macros/s/.../exec`)
+6. Copy the **Web App URL** — it looks like `https://script.google.com/macros/s/.../exec`
 
-> **Important:** Every time you update the Apps Script code, you must redeploy with a **New version** — go to Deploy → Manage deployments → Edit (pencil icon) → Version: New version → Deploy.
+> **Important:** Every time you update the Apps Script code, you must redeploy with a **New version** — go to Deploy → Manage deployments → Edit (pencil icon) → Version: New version → Deploy. Failing to do this means the old cached code keeps running.
 
 ### Step 4 — Configure the HTML App
 
@@ -126,7 +136,7 @@ Replace the placeholder with your actual Apps Script Web App URL from Step 3.
 ### Step 5 — Host on GitHub Pages
 
 1. Create a new repository on GitHub (can be private or public)
-2. Upload `store-logger.html` to the repository
+2. Upload `store-logger.html` and `README.md` to the repository
 3. Go to **Settings → Pages**
 4. Under "Source", select **Deploy from a branch** → choose `main` branch → `/ (root)`
 5. Click **Save**
@@ -143,86 +153,109 @@ Share this URL with your team. That's it.
 
 ### Logging Daily Entries
 
-1. Open the app and sign in
+1. Open the app and sign in — data is always fetched fresh from Google Sheets on login
 2. Select a **date** and **store** from the toolbar
 3. Click **+ Add Entry** to add a transaction row
-4. Fill in Qty, Amount, Remark, and set the Status
-5. Each entry auto-saves to Google Sheets after 1.5 seconds
-6. The **Updated By** column shows who last edited each row and when
+4. Each row has a field type dropdown (only unused fields shown), Qty, Amount, multi-line Remark, and Status
+5. Changes auto-save to Google Sheets after 1.5 seconds — the sync indicator shows the status
+6. The **Updated By** column shows who last edited each row and the local time of the edit
+7. Field types already added for the selected date/store are hidden from the dropdown to prevent duplicates
 
 ### Summary View
 
-Switch to the **Summary** tab to view data for any date:
-- **All Stores** — each store as a separate card
-- **Overall (Field-wise)** — totals rolled up across all stores by field type
-- **Individual store** — drill into one store only
+Switch to the **Summary** tab to view data for any date independently from the Daily Log:
 
-Use the status filter bar (All / Pending / In Progress / Completed) to filter across both views.
+- **All Stores** — each store shown as a separate card with its own table
+- **Overall (Field-wise)** — totals rolled up across all stores, broken down by field type
+- **Individual store** — select a specific store from the dropdown
+
+Use the status filter bar (All / Pending / In Progress / Completed) to filter rows across both the Daily Log and Summary views simultaneously. Filter counts update instantly when any status changes.
 
 ### Theme Toggle
 
-Click the 🌙 / ☀️ button in the top-right corner (visible on both the login screen and inside the app) to switch between dark and light mode. The preference is saved in the browser and applied automatically on the next visit.
+Click the 🌙 / ☀️ button in the top-right corner — visible on both the login screen and inside the app — to switch between dark and light mode. The preference is saved in the browser and applied automatically on the next visit.
 
 ### Mobile Layout
 
-On phones and small screens the app adapts automatically — the header and filter bar shrink to fit, and the data table switches from a wide horizontal layout to a **card-per-row** layout, showing each field as a labelled row within a card. This works in both the Daily Log and Summary views without any horizontal scrolling.
+On phones and small screens the app adapts automatically. The header collapses to two rows (logo + controls on top, tabs below), the filter bar sticks below the header, and the data table switches to a **card-per-row** layout where each field is shown as a labelled line. Remarks wrap fully across multiple lines. No horizontal scrolling anywhere.
 
 ### Admin Panel (Admin role only)
 
-- **User Management** — add, edit, delete users; assign roles and stores via a checkbox list (defaults to All Stores)
-- **Manage Stores** — add or remove store names
-- **Manage Fields** — add or remove transaction field types
-- **Export JSON** — download all data as a JSON backup file
-- **Export CSV** — download all data as a spreadsheet-friendly CSV
-- **Import JSON** — restore or merge data from a JSON export
-- **Pull from Sheet** — force a fresh sync from Google Sheets
-- **Push All to Sheet** — overwrite the sheet with current local data
-- **Deduplicate & Push** — remove duplicate field entries per store per date, then push clean data
+**User Management**
+- Add, edit, or delete users
+- Assign role: Admin, Editor, or Viewer
+- Assign stores via a checkbox list — tick individual stores or select "All Stores" (default)
+
+**Stores & Fields**
+- Add or remove store names — reflected immediately across the app and saved to the sheet
+- Add or remove transaction field types
+
+**Export / Import**
+- **Export JSON** — downloads all current data as a `.json` file
+- **Export CSV** — downloads all data as a `.csv` spreadsheet
+- **Import JSON** — merges data from a previously exported JSON file and pushes to sheet
+
+**Backups**
+- **Create Backup** — saves a full snapshot of all current data (stores, fields, entries) into the `backups` sheet tab, stamped with who created it and when (local time)
+- **Refresh List** — loads all saved backups, newest first, showing the timestamp, creator, and entry count
+- **Download** — saves any individual backup as a `.json` file to your device
+- **Restore** — shows a confirmation warning, then overwrites all current data with the selected backup and pushes it to the sheet
+
+> Best practice: always create a backup before running Deduplicate & Push or importing data.
+
+**Google Sheets Sync**
+- **Pull from Sheet** — force a full fresh fetch from Google Sheets
+- **Push All to Sheet** — overwrite the sheet with all current in-memory data
+- **Deduplicate & Push** — removes duplicate field entries (keeps the last one per field per store per date), then pushes the clean data to the sheet
+
+All action buttons disable and show a loading spinner while an operation is in progress, preventing accidental double-clicks.
 
 ---
 
 ## How Data Sync Works
 
 ```
-User opens app / clicks Sync
-        ↓
-App fetches fresh data from Google Sheets via Apps Script
-        ↓
-Data displayed in UI (no localStorage used for data)
-        ↓
+User logs in
+      ↓
+App fetches users, data, meta, and stores fresh from Google Sheets
+      ↓
+Data held in memory for the session
+      ↓
 User makes an edit
-        ↓
-Change saved locally in memory → auto-pushed to sheet after 1.5s
+      ↓
+Change saved in memory → auto-pushed to sheet after 1.5s
+      ↓
+User clicks Sync or logs in again → fresh fetch from sheet
 ```
 
-- **No stale data** — every login and every sync pulls fresh from the sheet
-- **No localStorage** for data — everything lives in Google Sheets
-- **Multiple users** see the same data (sync on login, or tap the Sync button)
-- **Offline** — the app will show an error if the sheet cannot be reached
+- **No stale data** — every login pulls fresh from the sheet, no localStorage caching for data
+- **All timestamps** — stored and displayed in the device's local timezone
+- **Multiple users** — each user always gets live data on login; use the Sync button to refresh mid-session
+- **Offline** — if the sheet is unreachable, the app shows an error and an empty state rather than showing old data
 
 ---
 
 ## Security Notes
 
-- Passwords are stored as plain text in Google Sheets — suitable for internal team use, not for public-facing apps
-- The Apps Script Web App URL acts as the API — keep it private; anyone with the URL can read/write the sheet
-- For stronger security, consider adding IP restrictions via Google Cloud or using Google OAuth
-- The Google Sheet itself can be restricted to your Google account only — the Apps Script runs as you regardless
+- Passwords are stored as plain text in Google Sheets — suitable for internal team use among trusted people, not for public-facing apps
+- The Apps Script Web App URL acts as the API endpoint — keep it private; anyone with the URL can read and write the sheet
+- The Google Sheet itself can be restricted to your Google account — the Apps Script runs as you regardless of who calls it
+- For stronger security, consider Google OAuth login or moving to a proper backend with hashed passwords
 
 ---
 
-## Updating the App Script
+## Updating the Apps Script
 
-After making any changes to `storelog-apps-script.gs`:
+After making changes to `storelog-apps-script.gs`:
 
-1. Open Apps Script editor
-2. Paste the updated code
+1. Open the Apps Script editor
+2. Paste the updated code and save
 3. Go to **Deploy → Manage deployments**
-4. Click the **pencil icon** on your deployment
+4. Click the **pencil icon** on your active deployment
 5. Change Version to **New version**
 6. Click **Deploy**
 
-Failing to create a new version means the old cached code keeps running.
+Always create a new version — editing in place does not update the deployed Web App.
 
 ---
 
@@ -230,11 +263,13 @@ Failing to create a new version means the old cached code keeps running.
 
 | Issue | Likely Cause | Fix |
 |---|---|---|
-| Login fails with "Could not reach server" | Apps Script URL wrong or not deployed | Check `SCRIPT_URL` in HTML and redeploy |
-| Data shows but is empty after sync | Sheet tabs not named correctly | Tabs must be exactly `data`, `users`, `meta` |
-| Dates show wrong day | Timezone mismatch | The app handles IST (UTC+5:30) automatically |
-| Sync dot stays red | Network or CORS issue | Check browser console; try redeploying Apps Script |
-| Duplicate entries in sheet | Old entries from before dedup fix | Use Admin → Deduplicate & Push |
-| Changes not saving | Apps Script not redeployed after update | Always deploy as New version after code changes |
-| Table overflows on mobile | Old cached version of the file | Hard refresh the page (Ctrl+Shift+R) or clear browser cache |
-| Theme resets on reload | localStorage cleared by browser | Re-toggle the theme; preference saves back automatically |
+| Login fails with "Could not reach server" | Apps Script URL wrong or not deployed | Check `SCRIPT_URL` in HTML and redeploy Apps Script |
+| Data is empty after sync | Sheet tabs not named correctly | Tabs must be exactly `data`, `users`, `meta`, `backups` |
+| Dates show the wrong day | Timezone offset issue | App now uses device local timezone automatically |
+| Sync dot stays red | Network or CORS error | Check browser console; try redeploying Apps Script as new version |
+| Duplicate entries in sheet | Multiple add-entry clicks before fix | Use Admin → Deduplicate & Push |
+| Changes not saving to sheet | Apps Script not redeployed after update | Always deploy as New version after any code change |
+| Table overflows on mobile | Old cached file version | Hard refresh (Ctrl+Shift+R) or clear browser cache |
+| Theme resets on reload | Browser cleared localStorage | Re-toggle the theme; it saves back automatically |
+| Backup restore says "not found" | Backup list not refreshed before restore | Click Refresh List before attempting to restore |
+| Buttons stay disabled after error | Rare JS exception before finally block | Reload the page to reset button states |
