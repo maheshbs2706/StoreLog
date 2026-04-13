@@ -187,7 +187,15 @@ td.td-remark textarea:focus{outline:none;border-color:var(--accent);background:v
 .mini-table td:first-child{color:var(--text);font-weight:500}
 .mini-table td.num{font-family:var(--mono);text-align:right;color:var(--text)}
 .mini-table th.num{text-align:right}
-.mini-table td.remark-cell{color:var(--text3);font-size:11px}
+.mini-table td.remark-cell{
+  color:var(--text3);font-size:11px;
+  white-space:pre-wrap;
+  word-break:break-word;
+  overflow:visible;
+  text-overflow:unset;
+  line-height:1.5;
+  vertical-align:top;
+}
 .overall-card{background:var(--surface2);border:1px solid var(--border2);border-radius:var(--radius);padding:14px 16px;display:flex;flex-wrap:wrap;gap:24px;align-items:center}
 .overall-stat .os-val{font-family:var(--mono);font-size:20px;font-weight:500;color:var(--accent);display:block}
 .overall-stat .os-key{font-family:var(--mono);font-size:10px;color:var(--text3)}
