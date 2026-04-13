@@ -1,13 +1,16 @@
 // ============================================================
-//  StoreLog — Google Apps Script Backend  (v3)
+//  StoreLog — Google Apps Script Backend  (v4)
 //  IMPORTANT: After pasting, redeploy as a NEW version:
 //  Deploy → Manage deployments → Edit (pencil) → Version: New version → Deploy
 // ============================================================
 
 const SHEET_ID = '1tobXlF3kBIZcuUzIK4W9BrRuoe0m7Yu42rWaFj4bBd8';
 
-// Sheet columns for 'data' tab:
-// date | store | field | qty | amount | remark | status | updatedBy | updatedAt
+// Sheet tabs required:
+//   data    — date | store | field | qty | amount | remark | status | updatedBy | updatedAt
+//   users   — username | password | role | stores
+//   meta    — key | value
+//   backups — id | label | createdBy | createdAt | totalRows | jsonBlob
 function makeResponse(data) {
   const output = ContentService
     .createTextOutput(JSON.stringify(data))

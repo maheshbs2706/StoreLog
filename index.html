@@ -231,6 +231,12 @@ td.td-remark textarea:focus{outline:none;border-color:var(--accent);background:v
 .store-check-all{border-bottom:1px solid var(--border);margin-bottom:4px;padding-bottom:4px}
 .store-check-all label{font-weight:500;color:var(--accent);font-family:var(--mono);font-size:12px}
 
+/* BACKUP */
+.backup-card{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;flex-wrap:wrap}
+.backup-card .bk-label{font-family:var(--mono);font-size:12px;color:var(--text);flex:1;min-width:120px}
+.backup-card .bk-meta{font-size:11px;color:var(--text3);flex:2;min-width:100px}
+.backup-card .bk-actions{display:flex;gap:6px;flex-shrink:0}
+
 /* TOAST */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--accent);color:#0f0f11;font-family:var(--mono);font-size:12px;font-weight:500;padding:8px 18px;border-radius:20px;opacity:0;transition:all .25s;pointer-events:none;z-index:300;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -548,6 +554,14 @@ td.td-remark textarea:focus{outline:none;border-color:var(--accent);background:v
       <p style="font-size:11px;color:var(--text3)">Export saves all data as a file. Import merges data from a previously exported JSON.</p>
     </div>
     <div class="admin-section">
+      <h3>Backups</h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn btn-accent" onclick="createBackup()">&#9711; Create Backup</button>
+        <button class="btn" onclick="loadBackupList()">&#8635; Refresh List</button>
+      </div>
+      <div id="backupList"><p style="font-size:12px;color:var(--text3)">Click "Refresh List" to see saved backups.</p></div>
+    </div>
+    <div class="admin-section">
       <h3>Google Sheets Sync</h3>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
         <button class="btn btn-accent" onclick="syncFromSheet(true)">&#8635; Pull from Sheet</button>
@@ -594,6 +608,21 @@ td.td-remark textarea:focus{outline:none;border-color:var(--accent);background:v
       <button class="btn" onclick="closeUserModal()">Cancel</button>
       <button class="btn btn-danger" id="umDelBtn" onclick="deleteUser()" style="display:none">Delete</button>
       <button class="btn btn-accent" onclick="saveUser()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: backup restore confirm -->
+<div class="modal-overlay" id="backupModal">
+  <div class="modal">
+    <h4>Restore Backup</h4>
+    <p id="backupModalDesc" style="font-size:12px;color:var(--text2);margin-bottom:14px"></p>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:14px;font-size:11px;color:var(--text3)">
+      ⚠️ This will <b style="color:var(--danger)">overwrite all current data</b> with the selected backup. This cannot be undone. Consider creating a new backup first.
+    </div>
+    <div class="modal-btns">
+      <button class="btn" onclick="closeBackupModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmRestore()">Restore</button>
     </div>
   </div>
 </div>
@@ -1276,6 +1305,105 @@ async function importJSON(event){
   }catch(e){toast('Import failed: '+e.message,true);}
   event.target.value='';
 }
+/* ── BACKUPS ── */
+// Backups are stored in a 'backups' sheet tab
+// Each row: [ backupId, label, createdBy, createdAt, jsonBlob ]
+let pendingRestoreId=null;
+
+async function createBackup(){
+  setSyncStatus('syncing','Creating backup…');
+  try{
+    const id='BK-'+Date.now();
+    const label=nowStr();
+    const blob=JSON.stringify({stores,fields,data});
+    const totalRows=Object.values(data).reduce((a,r)=>a+r.length,0);
+    await shAppendRow('backups',[id,label,currentUser.username,new Date().toISOString(),totalRows,blob]);
+    setSyncStatus('ok','Backup saved');
+    toast('Backup created: '+label);
+    loadBackupList();
+  }catch(e){
+    setSyncStatus('err','Backup failed');
+    toast('Backup failed: '+e.message,true);
+  }
+}
+
+async function loadBackupList(){
+  const el=document.getElementById('backupList');
+  el.innerHTML=`<p style="font-size:12px;color:var(--text3)">Loading…</p>`;
+  try{
+    const rows=await shGet('backups');
+    const dataRows=rows.slice(1).filter(r=>r[0]); // skip header
+    if(!dataRows.length){
+      el.innerHTML=`<p style="font-size:12px;color:var(--text3)">No backups yet. Click "Create Backup" to save one.</p>`;
+      return;
+    }
+    // show newest first
+    const sorted=[...dataRows].reverse();
+    el.innerHTML=sorted.map(r=>{
+      const[id,label,by,at,totalRows]=r;
+      return`<div class="backup-card">
+        <div>
+          <div class="bk-label">${esc(label)}</div>
+          <div class="bk-meta">by ${esc(by)} &nbsp;·&nbsp; ${totalRows||'?'} entries</div>
+        </div>
+        <div class="bk-actions">
+          <button class="btn" style="height:26px;font-size:11px;padding:0 10px" onclick="downloadBackup('${esc(id)}')">&#8595; Download</button>
+          <button class="btn btn-danger" style="height:26px;font-size:11px;padding:0 10px" onclick="openRestoreModal('${esc(id)}','${esc(label)}')">&#8635; Restore</button>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){
+    el.innerHTML=`<p style="font-size:12px;color:var(--danger)">Failed to load backups: ${esc(e.message)}</p>`;
+  }
+}
+
+async function downloadBackup(id){
+  try{
+    const rows=await shGet('backups');
+    const row=rows.find(r=>r[0]===id);
+    if(!row){toast('Backup not found',true);return;}
+    const[,label,by,,totalRows,blob]=row;
+    const payload={backupId:id,label,createdBy:by,totalRows,...JSON.parse(blob)};
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
+    a.download=`storelog-backup-${id}.json`;
+    a.click();
+    toast('Backup downloaded');
+  }catch(e){toast('Download failed: '+e.message,true);}
+}
+
+function openRestoreModal(id,label){
+  pendingRestoreId=id;
+  document.getElementById('backupModalDesc').textContent=`Restore backup: "${label}"`;
+  document.getElementById('backupModal').classList.add('open');
+}
+function closeBackupModal(){
+  pendingRestoreId=null;
+  document.getElementById('backupModal').classList.remove('open');
+}
+async function confirmRestore(){
+  if(!pendingRestoreId)return;
+  closeBackupModal();
+  setSyncStatus('syncing','Restoring…');
+  try{
+    const rows=await shGet('backups');
+    const row=rows.find(r=>r[0]===pendingRestoreId);
+    if(!row){toast('Backup not found',true);return;}
+    const blob=row[5];
+    const payload=JSON.parse(blob);
+    if(payload.stores)stores=payload.stores;
+    if(payload.fields)fields=payload.fields;
+    if(payload.data)data=payload.data;
+    renderStores();refreshCurrentView();
+    await pushAllToSheet();
+    setSyncStatus('ok','Restored');
+    toast('Backup restored successfully');
+  }catch(e){
+    setSyncStatus('err','Restore failed');
+    toast('Restore failed: '+e.message,true);
+  }
+}
+document.getElementById('backupModal').addEventListener('click',e=>{if(e.target===document.getElementById('backupModal'))closeBackupModal()});
 
 </script>
 </body>
