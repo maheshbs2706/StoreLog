@@ -89,6 +89,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--s
 .sync-dot.err{background:var(--danger)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 
+/* LOADER */
+#loader{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .35s}
+#loader.fade-out{opacity:0;pointer-events:none}
+.loader-spinner{width:40px;height:40px;border:3px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+.loader-label{font-family:var(--mono);font-size:13px;color:var(--text2);letter-spacing:.03em}
+@keyframes spin{to{transform:rotate(360deg)}}
+
 /* TOOLBAR ROWS */
 .toolbar-row1,.toolbar-row2{display:contents}
 
@@ -164,6 +171,8 @@ td.td-remark textarea:focus{outline:none;border-color:var(--accent);background:v
 .row-num{font-family:var(--mono);font-size:11px;color:var(--text3);width:28px;text-align:center}
 .del-btn{background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:4px 8px;border-radius:6px;transition:all .1s}
 .del-btn:hover{color:var(--danger);background:rgba(224,85,85,.1)}
+.edit-date-btn{background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:4px 8px;border-radius:6px;transition:all .1s}
+.edit-date-btn:hover{color:var(--accent);background:rgba(212,245,106,.1)}
 .field-sel{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 22px 4px 8px;font-family:var(--sans);font-size:13px;color:var(--text);appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2355556a'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center}
 .field-sel:focus{outline:none;border-color:var(--accent)}
 .empty-state{padding:48px 16px;text-align:center;color:var(--text3)}
@@ -325,6 +334,7 @@ td.td-remark textarea:focus{outline:none;border-color:var(--accent);background:v
     flex-shrink:0;
     min-width:60px;
     padding-top:3px;
+    text-align:left;
   }
   /* all values right-aligned by default */
   td > *:not(button){
@@ -453,6 +463,12 @@ td.td-remark textarea:focus{outline:none;border-color:var(--accent);background:v
   </div>
 </div>
 
+<!-- LOADER -->
+<div id="loader">
+  <div class="loader-spinner"></div>
+  <div class="loader-label" id="loaderLabel">Loading data…</div>
+</div>
+
 <!-- APP -->
 <div id="appShell">
   <div class="header">
@@ -488,7 +504,12 @@ td.td-remark textarea:focus{outline:none;border-color:var(--accent);background:v
   <div id="view-log" style="display:none">
     <div class="toolbar">
       <div class="toolbar-row1">
-        <input type="date" id="dateInput" onchange="onLogChange()">
+        <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">From</span>
+          <input type="date" id="fromDateInput" onchange="onLogChange()">
+          <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">To</span>
+          <input type="date" id="toDateInput" onchange="onLogChange()">
+        </div>
         <div class="store-select-wrap">
           <select id="storeSelect" onchange="onLogChange()"></select>
         </div>
@@ -498,12 +519,13 @@ td.td-remark textarea:focus{outline:none;border-color:var(--accent);background:v
         <button class="btn" id="btnManageStores" onclick="openManage('store')" style="display:none">&#8853; Stores</button>
         <button class="btn" id="btnManageFields" onclick="openManage('field')" style="display:none">&#8853; Fields</button>
         <button class="btn" onclick="syncFromSheet(true)">&#8635; Sync</button>
+        <span id="rangeModeNotice" style="display:none;font-size:11px;font-family:var(--mono);color:var(--text3);padding:0 4px">&#128274; Range view — read only</span>
         <div class="chips" id="summaryChips"></div>
       </div>
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr>
+        <thead><tr id="logHead">
           <th style="width:28px">#</th>
           <th style="width:130px">Field Type</th>
           <th style="width:70px">Qty</th>
@@ -521,7 +543,12 @@ td.td-remark textarea:focus{outline:none;border-color:var(--accent);background:v
   <!-- SUMMARY -->
   <div id="view-summary" style="display:none">
     <div class="toolbar">
-      <input type="date" id="summDateInput" onchange="renderSummary()">
+      <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">From</span>
+        <input type="date" id="summFromDateInput" onchange="onSummChange()">
+        <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">To</span>
+        <input type="date" id="summToDateInput" onchange="onSummChange()">
+      </div>
       <div class="store-select-wrap" style="max-width:220px">
         <select id="summStoreSelect" onchange="renderSummary()">
           <option value="__all">All Stores</option>
@@ -898,12 +925,18 @@ async function startApp(){
   document.getElementById('btnManageStores').style.display=role==='admin'?'':'none';
   document.getElementById('btnManageFields').style.display=role==='admin'?'':'none';
   const today=new Date().toISOString().split('T')[0];
-  document.getElementById('dateInput').value=today;
-  document.getElementById('summDateInput').value=today;
+  document.getElementById('fromDateInput').value=today;
+  document.getElementById('toDateInput').value=today;
+  document.getElementById('summFromDateInput').value=today;
+  document.getElementById('summToDateInput').value=today;
   showView('log');
   fixStickyAfterRender();
+  const loader=document.getElementById('loader');
+  loader.style.display='flex';
   await syncFromSheet();
   fixStickyAfterRender();
+  loader.classList.add('fade-out');
+  setTimeout(()=>{loader.style.display='none';loader.classList.remove('fade-out');},380);
 }
 
 /* ── STORES/FIELDS ── */
@@ -943,9 +976,13 @@ function toDateStr(val){
     return `${y}-${m}-${day}`;
   }catch{return s;}
 }
-function getDate(){return document.getElementById('dateInput').value}
+function getDate(){return document.getElementById('fromDateInput').value}
+function getToDate(){return document.getElementById('toDateInput').value}
+function isRangeMode(){const f=getDate(),t=getToDate();return !!(f&&t&&t>f)}
 function getStore(){return document.getElementById('storeSelect').value}
-function getSummDate(){return document.getElementById('summDateInput').value}
+function getSummDate(){return document.getElementById('summFromDateInput').value}
+function getSummToDate(){return document.getElementById('summToDateInput').value}
+function isSummRangeMode(){const f=getSummDate(),t=getSummToDate();return !!(f&&t&&t>f)}
 function getSummStore(){return document.getElementById('summStoreSelect').value}
 function dkey(){return getDate()+'__'+getStore()}
 function getRows(){return data[dkey()]||[]}
@@ -974,13 +1011,71 @@ function refreshCurrentView(){
 }
 
 /* ── LOG ── */
-function onLogChange(){renderLog()}
+function onLogChange(){
+  const from=getDate(),to=getToDate();
+  if(from&&to&&to<from) document.getElementById('toDateInput').value=from;
+  renderLog();
+}
+function jumpToDate(d){
+  document.getElementById('fromDateInput').value=d;
+  document.getElementById('toDateInput').value=d;
+  renderLog();
+}
 function availableFields(rows,idx){
   const used=new Set(rows.map((r,i)=>i!==idx?r.field:null).filter(Boolean));
   return fields.filter(f=>!used.has(f)||rows[idx].field===f);
 }
 function renderLog(){
-  const isEdit=currentUser&&(currentUser.role==='editor'||currentUser.role==='admin');
+  const rangeMode=isRangeMode();
+  const canEdit=!!(currentUser&&(currentUser.role==='editor'||currentUser.role==='admin'));
+  const isEdit=canEdit&&!rangeMode;
+  const btn=document.getElementById('btnAddEntry');
+  btn.style.display=(canEdit&&!rangeMode)?'inline-flex':'none';
+  document.getElementById('rangeModeNotice').style.display=rangeMode?'':'none';
+  const head=document.getElementById('logHead');
+  if(rangeMode){
+    head.innerHTML=`<th style="width:28px">#</th><th style="width:90px">Date</th><th style="width:130px">Field Type</th><th style="width:70px">Qty</th><th style="width:110px">Amount (&#8377;)</th><th>Remark</th><th style="width:110px">Status</th><th style="width:110px">Updated By</th><th style="width:36px"></th>`;
+    const store=getStore();
+    const allRangeRows=[];
+    const end=new Date(getToDate());
+    let cur=new Date(getDate());
+    while(cur<=end){
+      const ds=toDateStr(cur.toISOString());
+      (data[ds+'__'+store]||[]).forEach(r=>allRangeRows.push({...r,_date:ds}));
+      cur.setDate(cur.getDate()+1);
+    }
+    const filtered=statusFilter==='all'?allRangeRows:allRangeRows.filter(r=>(r.status||'pending')===statusFilter);
+    updateStatusCounts(allRangeRows);
+    const body=document.getElementById('logBody');
+    if(!allRangeRows.length){
+      body.innerHTML=`<tr><td colspan="9"><div class="empty-state"><p>No entries for this date range &amp; store.</p></div></td></tr>`;
+      renderChips([]);return;
+    }
+    if(!filtered.length){
+      body.innerHTML=`<tr><td colspan="9"><div class="empty-state"><p>No <b>${statusFilter}</b> entries in this range.</p></div></td></tr>`;
+      renderChips(allRangeRows);return;
+    }
+    body.innerHTML=filtered.map((r,i)=>{
+      const updInfo=r.updatedBy
+        ?`<div style="font-size:11px;font-family:var(--mono);color:var(--accent)">${esc(r.updatedBy)}</div><div style="font-size:10px;color:var(--text3)">${esc(r.updatedAt||'')}</div>`
+        :`<span style="color:var(--text3);font-size:11px">—</span>`;
+      const editBtn=canEdit
+        ?`<button class="edit-date-btn" title="Edit this date" onclick="jumpToDate('${r._date}')">✎</button>`
+        :``;
+      return`<tr>
+        <td class="row-num">${i+1}</td>
+        <td data-label="Date" style="font-family:var(--mono);font-size:12px;color:var(--text2);white-space:nowrap">${r._date}</td>
+        <td data-label="Field" class="td-field">${esc(r.field)}</td>
+        <td data-label="Qty" class="td-num">${r.qty||'—'}</td>
+        <td data-label="Amount" class="td-num">&#8377;${Number(r.amount||0).toLocaleString('en-IN',{maximumFractionDigits:2})}</td>
+        <td data-label="Remark" class="td-remark"><div class="remark-text">${esc(r.remark||'—')}</div></td>
+        <td data-label="Status" class="td-status"><span class="status-pill status-${r.status||'pending'}">${r.status||'pending'}</span></td>
+        <td data-label="Updated" class="td-updated">${updInfo}</td>
+        <td>${editBtn}</td></tr>`;
+    }).join('');
+    renderChips(filtered);return;
+  }
+  head.innerHTML=`<th style="width:28px">#</th><th style="width:130px">Field Type</th><th style="width:70px">Qty</th><th style="width:110px">Amount (&#8377;)</th><th>Remark</th><th style="width:110px">Status</th><th style="width:110px">Updated By</th><th style="width:36px"></th>`;
   const allRows=getRows();
   const rows=statusFilter==='all'?allRows:allRows.filter(r=>(r.status||'pending')===statusFilter);
   updateStatusCounts(allRows);
@@ -1106,18 +1201,31 @@ function delRow(i){
 }
 
 /* ── SUMMARY ── */
+function onSummChange(){
+  const from=getSummDate(),to=getSummToDate();
+  if(from&&to&&to<from) document.getElementById('summToDateInput').value=from;
+  renderSummary();
+}
 function renderSummary(){
-  const d=getSummDate(),filter=getSummStore();
+  const fromD=getSummDate(),filter=getSummStore();
+  const summRange=isSummRangeMode();
+  const toD=summRange?getSummToDate():fromD;
   const grid=document.getElementById('summaryGrid');
-  document.getElementById('summLabel').textContent=d||'';
-  if(!d){grid.innerHTML=`<div class="empty-state"><p>Select a date to view summary.</p></div>`;return;}
+  if(!fromD){
+    document.getElementById('summLabel').textContent='';
+    grid.innerHTML=`<div class="empty-state"><p>Select a date to view summary.</p></div>`;return;
+  }
+  const dates=[];
+  let cur=new Date(fromD);const end=new Date(toD);
+  while(cur<=end){dates.push(toDateStr(cur.toISOString()));cur.setDate(cur.getDate()+1);}
+  document.getElementById('summLabel').textContent=summRange?`${fromD} → ${toD}`:fromD;
   const allowed=userStores();
-  updateStatusCounts(allowed.flatMap(s=>data[d+'__'+s]||[]));
-  if(filter==='__overall'){renderOverall(d,grid,allowed);return;}
+  updateStatusCounts(allowed.flatMap(s=>dates.flatMap(d=>data[d+'__'+s]||[])));
+  if(filter==='__overall'){renderOverall(dates,grid,allowed);return;}
   const targets=filter==='__all'?allowed:[filter];
   let html='',hasAny=false;
   targets.forEach(store=>{
-    const allR=data[d+'__'+store]||[];
+    const allR=dates.flatMap(d=>(data[d+'__'+store]||[]).map(r=>({...r,_date:d})));
     const rows=statusFilter==='all'?allR:allR.filter(r=>(r.status||'pending')===statusFilter);
     if(!rows.length)return;hasAny=true;
     const tAmt=rows.reduce((a,r)=>a+Number(r.amount||0),0);
@@ -1127,9 +1235,13 @@ function renderSummary(){
         <span class="stotals">${rows.length} entries &middot; &#8377;${tAmt.toLocaleString('en-IN',{maximumFractionDigits:2})}</span>
       </div>
       <table class="mini-table">
-        <colgroup><col class="col-field"><col class="col-qty"><col class="col-amt"><col class="col-status"><col class="col-remark"><col style="width:14%"></colgroup>
-        <thead><tr><th>Field</th><th class="num">Qty</th><th class="num">Amount</th><th>Status</th><th>Remark</th><th>Updated By</th></tr></thead>
+        ${summRange
+          ?`<colgroup><col style="width:10%"><col class="col-field"><col class="col-qty"><col class="col-amt"><col class="col-status"><col class="col-remark"><col style="width:14%"></colgroup>
+            <thead><tr><th>Date</th><th>Field</th><th class="num">Qty</th><th class="num">Amount</th><th>Status</th><th>Remark</th><th>Updated By</th></tr></thead>`
+          :`<colgroup><col class="col-field"><col class="col-qty"><col class="col-amt"><col class="col-status"><col class="col-remark"><col style="width:14%"></colgroup>
+            <thead><tr><th>Field</th><th class="num">Qty</th><th class="num">Amount</th><th>Status</th><th>Remark</th><th>Updated By</th></tr></thead>`}
         <tbody>${rows.map(r=>`<tr>
+          ${summRange?`<td data-label="Date" style="font-family:var(--mono);font-size:11px;color:var(--text2);white-space:nowrap">${r._date}</td>`:''}
           <td data-label="Field">${esc(r.field)}</td>
           <td data-label="Qty" class="num">${r.qty||'—'}</td>
           <td data-label="Amount" class="num">&#8377;${Number(r.amount||0).toLocaleString('en-IN',{maximumFractionDigits:2})}</td>
@@ -1142,23 +1254,27 @@ function renderSummary(){
   });
   grid.innerHTML=hasAny?html:`<div class="empty-state"><div class="big">🗂</div><p>No entries for this selection.</p></div>`;
 }
-function renderOverall(d,grid,allowed){
+function renderOverall(dates,grid,allowed){
   const fm={};let gQ=0,gA=0,gE=0;
   allowed.forEach(store=>{
-    const allR=data[d+'__'+store]||[];
-    (statusFilter==='all'?allR:allR.filter(r=>(r.status||'pending')===statusFilter)).forEach(r=>{
-      const f=r.field||'Unknown';
-      if(!fm[f])fm[f]={qty:0,amount:0,count:0};
-      fm[f].qty+=Number(r.qty||0);fm[f].amount+=Number(r.amount||0);fm[f].count++;
-      gQ+=Number(r.qty||0);gA+=Number(r.amount||0);gE++;
+    dates.forEach(d=>{
+      const allR=data[d+'__'+store]||[];
+      (statusFilter==='all'?allR:allR.filter(r=>(r.status||'pending')===statusFilter)).forEach(r=>{
+        const f=r.field||'Unknown';
+        if(!fm[f])fm[f]={qty:0,amount:0,count:0};
+        fm[f].qty+=Number(r.qty||0);fm[f].amount+=Number(r.amount||0);fm[f].count++;
+        gQ+=Number(r.qty||0);gA+=Number(r.amount||0);gE++;
+      });
     });
   });
-  if(!gE){grid.innerHTML=`<div class="empty-state"><div class="big">🗂</div><p>No entries for ${d}.</p></div>`;return;}
+  const dateLabel=dates.length===1?dates[0]:`${dates[0]} → ${dates[dates.length-1]}`;
+  if(!gE){grid.innerHTML=`<div class="empty-state"><div class="big">🗂</div><p>No entries for ${dateLabel}.</p></div>`;return;}
+  const activeStores=allowed.filter(s=>dates.some(d=>(data[d+'__'+s]||[]).length>0)).length;
   grid.innerHTML=`<div class="overall-card">
     <div class="overall-stat"><span class="os-val">${gE}</span><span class="os-key">Total Entries</span></div>
     <div class="overall-stat"><span class="os-val">${gQ.toLocaleString('en-IN')}</span><span class="os-key">Total Qty</span></div>
     <div class="overall-stat"><span class="os-val">&#8377;${gA.toLocaleString('en-IN',{maximumFractionDigits:2})}</span><span class="os-key">Total Amount</span></div>
-    <div class="overall-stat"><span class="os-val">${allowed.filter(s=>(data[d+'__'+s]||[]).length>0).length}</span><span class="os-key">Active Stores</span></div>
+    <div class="overall-stat"><span class="os-val">${activeStores}</span><span class="os-key">Active Stores</span></div>
   </div>
   <div class="store-card">
     <div class="store-card-header"><span class="sname" style="color:var(--text)">Field-wise Totals</span><span class="stotals">All stores combined</span></div>
